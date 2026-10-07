@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     max_upload_mb: int = 20
     embedding_model: str = "intfloat/multilingual-e5-small"
 
+    # A chave em si (ANTHROPIC_API_KEY) não passa por aqui: o SDK da Anthropic a lê
+    # direto do ambiente. Assim ela nunca aparece num repr()/log das configurações.
+    anthropic_model: str = "claude-haiku-4-5-20251001"
+
 
 @lru_cache
 def get_settings() -> Settings:
