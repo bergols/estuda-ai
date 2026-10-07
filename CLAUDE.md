@@ -7,7 +7,8 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
 
 ## Como trabalhar neste projeto
 
-- **Explique as decisões de banco.** Em commits e em `docs/modelagem.md`, diga o
+- **Explique as decisões de banco.** Em commits e em `docs/` (`modelagem.md` para o
+  schema, `busca-semantica.md` para busca/índices/transações do pipeline), diga o
   *porquê* (alternativas consideradas, custo/benefício), não só o quê. Didático,
   em português.
 - **Commits pequenos, Conventional Commits em português** (`feat:`, `fix:`, `docs:`,
@@ -18,21 +19,36 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
 
 ## Estado atual
 
-Fase 1 concluída (fundação + modelagem). Roadmap das fases 2–6 no `README.md`.
+Fases 1 (fundação + modelagem) e 2 (upload de PDF, embeddings, busca semântica/textual/
+híbrida, experimento HNSW) concluídas. Próxima: fase 3 (geração de flashcards/questões
+com a API da Anthropic). Roadmap no `README.md`.
 
 ## Comandos
 
 ```bash
 docker compose up -d --build                       # sobe db + backend (aplica migrations)
-docker compose exec backend pytest                 # testes (banco estuda_ai_test)
+docker compose exec backend pytest                 # testes (banco estuda_ai_test, embedder falso)
+docker compose exec backend pytest -m modelo       # teste com o modelo real de embeddings
 docker compose exec backend alembic check          # modelos x migrations em sincronia?
 docker compose exec backend alembic revision -m "descricao"
 docker compose exec db psql -U estuda_ai -d estuda_ai
+docker compose exec backend python -m scripts.seed_experimento   # 50 mil trechos sintéticos
+docker compose exec backend python -m scripts.experimento_hnsw   # regenera docs/experimentos/hnsw.md
 ```
 
 Docker aqui é **Colima** (`colima start` se o socket não responder). Testes também
 rodam no host com `uv run pytest`, sobrescrevendo `DATABASE_URL`/`TEST_DATABASE_URL`
 com `localhost` no lugar de `db`.
+
+Armadilhas de ambiente já encontradas:
+- O `--reload` do uvicorn só funciona com `WATCHFILES_FORCE_POLLING` (já no compose): os
+  eventos de arquivo do macOS não atravessam o virtiofs do Colima.
+- `shm_size: 1gb` no serviço `db` é necessário para `CREATE INDEX` paralelo (HNSW).
+- O shell é zsh: variável com várias flags sem aspas não é dividida (`curl $FLAGS` quebra).
+  Use `bash <<'EOF'` ou scripts Python. `docker compose exec -T` dentro de um heredoc
+  consome o stdin: use `</dev/null`.
+- Nas migrations, nomes passados a `op.drop_constraint` vão com `op.f("...")`; sem isso a
+  naming convention adiciona o prefixo de novo (`ck_materiais_ck_materiais_...`).
 
 ## Convenções de banco (seguir nas próximas migrations)
 
@@ -54,25 +70,46 @@ com `localhost` no lugar de `db`.
 - ON DELETE: `CASCADE` na hierarquia de posse; `SET NULL` quando o filho deve
   sobreviver à origem (ex. `trecho_id`). ORM com `passive_deletes=True`.
 - Unicidade e integridade **no banco**; nada de "SELECT para checar antes do INSERT".
-- Embeddings: `vector(1024)` (constante `EMBEDDING_DIM`), índice HNSW `vector_cosine_ops`
-  → consultas devem usar o operador `<=>`.
+- Embeddings: `vector(384)` (constante `EMBEDDING_DIM`, modelo
+  `intfloat/multilingual-e5-small`), índice HNSW `vector_cosine_ops` → consultas usam o
+  operador `<=>`. Trocar de modelo = migration nova + reprocessar todos os trechos.
+  O e5 exige os prefixos `"passage: "`/`"query: "` (já em `EmbedderE5`).
+- Busca vetorial sempre com `set_config('hnsw.ef_search', ..., true)` >= LIMIT e
+  `hnsw.iterative_scan = strict_order` (ver `_configurar_hnsw` em `app/servicos/busca.py`).
+  Toda busca filtra por `trechos.disciplina_id` (cópia protegida pela FK composta
+  `(material_id, disciplina_id) → materiais(id, disciplina_id)`).
+- Full-text: configuração `portugues_unaccent` (constante `CONFIG_TEXTO`), coluna gerada
+  `trechos.conteudo_tsv` + GIN. Nunca grave `conteudo_tsv` à mão.
+- Desnormalizar só com proteção: preferir que o banco garanta a coerência (FK composta,
+  coluna gerada); se não der, o código grava as duas cópias na mesma transação.
 - Escritas que mexem em mais de uma tabela (ex. revisão SM-2: `INSERT revisoes` +
-  `UPDATE flashcards`) vão na **mesma transação**.
+  `UPDATE flashcards`; trechos + status do material) vão na **mesma transação**.
+- Transições de estado com compare-and-set: `UPDATE ... WHERE id = ? AND status = 'x'
+  RETURNING`; 0 linhas = outro processo chegou antes. Trabalho pesado (CPU, rede, LLM)
+  fica **fora** de transação aberta.
+- Arquivos ficam no volume `uploads`; o banco guarda o caminho relativo. Disco e banco
+  não têm transação comum: no upload, apagar o arquivo se o INSERT falhar; no delete,
+  apagar o arquivo só depois do COMMIT.
 
 ## Convenções de código
 
 - Python 3.12, SQLAlchemy 2.0 síncrono (`Mapped`/`mapped_column`) com psycopg 3.
 - Dependências com `uv` (`uv add`, `uv add --dev`); `uv.lock` é commitado.
-- Rotas em `app/routers/<recurso>.py`; schemas Pydantic em `app/schemas.py`.
+- Rotas em `app/routers/<recurso>.py`; lógica em `app/servicos/`; schemas Pydantic em
+  `app/schemas.py`. SQL de busca escrito por extenso com `text()` (é objeto de estudo).
+- Disciplina do usuário via dependência `DisciplinaDoUsuario` (404 se não for dele).
+- Tarefas em background recebem a fábrica de sessões (`FabricaSessaoDep`), nunca a sessão
+  da requisição. Modelo de embeddings via `EmbedderDep` (nos testes, `EmbedderFalso`).
 - Usuário atual via dependência `UsuarioAtual` (provisório: header `X-Usuario-Id`;
   será trocado por autenticação sem mudar as rotas). Toda consulta filtra pelo dono;
   recurso de outro usuário → 404.
 - Nomes de domínio em português (tabelas, colunas, funções, testes).
 - Testes contra Postgres real, nunca SQLite. Cada teste roda numa transação desfeita
   no fim (ver `tests/conftest.py`). Regras do banco têm teste em `tests/test_schema.py`.
+  Testes com o modelo real levam `@pytest.mark.modelo` (fora da execução padrão).
+- PDFs de teste são gerados com `criar_pdf()` do conftest.
 
 ## Segredos
 
 `.env` nunca é commitado (está no `.gitignore`). Novas variáveis entram no
-`.env.example` com valor de exemplo. Chaves futuras: `ANTHROPIC_API_KEY`,
-`VOYAGE_API_KEY`.
+`.env.example` com valor de exemplo. Chave futura: `ANTHROPIC_API_KEY` (fase 3).
