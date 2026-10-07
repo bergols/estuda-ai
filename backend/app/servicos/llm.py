@@ -99,6 +99,7 @@ class ErroGeracao(Exception):
     modelo: str
     uso: Uso = field(default_factory=Uso)
     duracao_ms: int = 0
+    geracao: Any = None  # linha de auditoria gravada para a falha (app.models.Geracao)
 
     def __str__(self) -> str:
         return self.mensagem

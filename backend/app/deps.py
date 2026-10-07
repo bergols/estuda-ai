@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
@@ -8,11 +9,26 @@ from app.config import Settings, get_settings
 from app.db import SessionLocal, get_session
 from app.models import Disciplina, Usuario
 from app.servicos.embeddings import Embedder, get_embedder
+from app.servicos.llm import ClienteLLM
 from app.servicos.processamento import FabricaSessao
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 EmbedderDep = Annotated[Embedder, Depends(get_embedder)]
+
+
+@lru_cache
+def _cliente_llm(modelo: str) -> ClienteLLM:
+    return ClienteLLM(modelo)
+
+
+def get_llm(settings: Annotated[Settings, Depends(get_settings)]) -> ClienteLLM:
+    """Um cliente por modelo e por processo (reaproveita conexões HTTP).
+    Nos testes é substituído por um ClienteLLM com AnthropicFalso."""
+    return _cliente_llm(settings.anthropic_model)
+
+
+LLMDep = Annotated[ClienteLLM, Depends(get_llm)]
 
 
 def get_fabrica_sessao() -> FabricaSessao:

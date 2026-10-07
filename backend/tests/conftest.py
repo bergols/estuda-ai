@@ -23,11 +23,14 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_session
-from app.deps import get_fabrica_sessao
+from app.deps import get_fabrica_sessao, get_llm
 from app.main import app
 from app.models import Usuario
 from app.servicos.embeddings import get_embedder
-from tests.fakes import EmbedderFalso
+from app.servicos.llm import ClienteLLM
+from tests.fakes import AnthropicFalso, EmbedderFalso
+
+MODELO_TESTE = "claude-haiku-4-5-20251001"
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -109,12 +112,20 @@ def fabrica(session):
 
 
 @pytest.fixture
-def client(session, embedder, pasta_uploads, fabrica):
+def anthropic_falso():
+    """API da Anthropic simulada. Cada teste coloca as respostas em .roteiro;
+    se o código chamar o LLM sem roteiro, o teste falha (nenhuma chamada real)."""
+    return AnthropicFalso()
+
+
+@pytest.fixture
+def client(session, embedder, pasta_uploads, fabrica, anthropic_falso):
     settings = get_settings().model_copy(update={"upload_dir": pasta_uploads, "max_upload_mb": 1})
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_embedder] = lambda: embedder
     app.dependency_overrides[get_fabrica_sessao] = lambda: fabrica
+    app.dependency_overrides[get_llm] = lambda: ClienteLLM(MODELO_TESTE, cliente=anthropic_falso)
     # O TestClient só devolve a resposta depois de rodar as BackgroundTasks,
     # então ao fim de um client.post(...) o processamento já terminou.
     with TestClient(app) as c:

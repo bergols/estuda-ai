@@ -6,9 +6,10 @@ primeira linha de defesa, o banco é a última.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
 
 Nome = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 Descricao = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
@@ -88,3 +89,41 @@ class ResultadoBusca(BaseModel):
     # Só no modo híbrido: posição do trecho em cada lista antes da fusão
     posicao_semantica: int | None = None
     posicao_textual: int | None = None
+
+
+# ------------------------------------------------------------------ fase 3
+
+
+class GeracaoResumo(BaseModel):
+    """O que a chamada ao LLM custou (linha da tabela geracoes)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    modelo: str
+    tokens_entrada: int
+    tokens_saida: int
+    custo_usd: Decimal | None
+    duracao_ms: int
+    chamadas: int
+
+
+class PerguntaEntrada(BaseModel):
+    pergunta: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+    k: int = Field(default=6, ge=1, le=12)
+
+
+class Citacao(BaseModel):
+    trecho_id: int
+    material_id: int
+    material_titulo: str
+    pagina: int | None
+    pagina_fim: int | None
+    trecho: str  # início do texto citado, para conferência
+
+
+class RespostaPergunta(BaseModel):
+    resposta: str
+    encontrado: bool
+    citacoes: list[Citacao]
+    geracao: GeracaoResumo | None  # None quando nem foi preciso chamar o LLM
