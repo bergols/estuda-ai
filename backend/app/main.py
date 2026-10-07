@@ -1,0 +1,24 @@
+from typing import Annotated
+
+from fastapi import Depends, FastAPI
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from app.db import get_session
+
+app = FastAPI(title="estuda-ai", version="0.1.0")
+
+
+@app.get("/health")
+def health(session: Annotated[Session, Depends(get_session)]):
+    """Verifica se a API alcança o banco e se a extensão pgvector está ativa."""
+    try:
+        session.execute(text("SELECT 1"))
+        pgvector = session.execute(
+            text("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
+        ).scalar_one_or_none()
+    except SQLAlchemyError:
+        return JSONResponse(status_code=503, content={"status": "erro", "banco": "indisponivel"})
+    return {"status": "ok", "banco": "ok", "pgvector": pgvector}
