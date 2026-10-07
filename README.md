@@ -7,8 +7,9 @@ desempenho por disciplina e tópico.
 
 É um projeto de portfólio com um objetivo paralelo: **aprender banco de dados a fundo**
 (PostgreSQL, modelagem, índices, transações e busca vetorial). Por isso as decisões de
-banco estão explicadas nos commits, em [`docs/modelagem.md`](docs/modelagem.md) e em
-[`docs/busca-semantica.md`](docs/busca-semantica.md).
+banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/modelagem.md),
+[busca semântica](docs/busca-semantica.md), [geração com LLM](docs/geracao-llm.md) e
+[exercícios de SQL](docs/exercicios.md).
 
 ## Stack
 
@@ -18,7 +19,7 @@ banco estão explicadas nos commits, em [`docs/modelagem.md`](docs/modelagem.md)
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic, Pydantic |
 | Busca | embeddings locais (`intfloat/multilingual-e5-small`, 384 dimensões, sentence-transformers) + full-text do Postgres |
 | PDF | PyMuPDF |
-| IA | API da Anthropic (geração de flashcards e questões, fase 3) |
+| LLM | API da Anthropic (SDK `anthropic`), padrão Claude Haiku 4.5, saída estruturada validada com Pydantic |
 | Frontend | Next.js + TypeScript (fase 6) |
 | Infra | Docker Compose |
 | Testes | pytest contra Postgres real |
@@ -42,7 +43,9 @@ Depois, na raiz do projeto:
 cp .env.example .env
 ```
 
-Edite o `.env` e troque `troque-esta-senha` (nas três linhas) por uma senha sua. Então:
+Edite o `.env` e troque `troque-esta-senha` (nas três linhas) por uma senha sua. Para as
+rotas que usam o LLM, descomente `ANTHROPIC_API_KEY` e coloque sua chave (o `.env` nunca vai
+para o Git). Então:
 
 ```bash
 docker compose up --build
@@ -135,6 +138,37 @@ docker compose exec backend python -m scripts.experimento_hnsw
 
 O seed cria o usuário `experimento@estuda-ai.local`; apagá-lo remove tudo em cascata.
 
+### Geração com LLM
+
+Precisa de `ANTHROPIC_API_KEY` no `.env` (depois de editar, recrie o container:
+`docker compose up -d backend`). Pergunte ao material:
+
+```bash
+curl -X POST localhost:8000/disciplinas/1/perguntar -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"pergunta":"O que o ROLLBACK faz?"}'
+```
+
+Gere flashcards (de um material ou de um tema) e questões:
+
+```bash
+curl -X POST localhost:8000/disciplinas/1/flashcards/gerar -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"material_id":1,"quantidade":5}'
+```
+
+```bash
+curl -X POST localhost:8000/disciplinas/1/questoes/gerar -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"tema":"índices","quantidade":3}'
+```
+
+Responda uma questão e veja o gasto:
+
+```bash
+curl -X POST localhost:8000/disciplinas/1/questoes/1/tentativas -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"alternativa":"B","tempo_ms":8000}'
+```
+
+```bash
+curl localhost:8000/gastos -H 'X-Usuario-Id: 1'
+```
+
+Nos testes a API da Anthropic é sempre simulada: nenhum teste gasta tokens.
+
 ## Estrutura
 
 ```
@@ -147,13 +181,15 @@ estuda-ai/
 │   │   ├── schemas.py       # contratos Pydantic da API
 │   │   ├── deps.py          # dependências (sessão, usuário atual, embedder)
 │   │   ├── routers/         # rotas por recurso
-│   │   └── servicos/        # pdf, chunking, embeddings, processamento, busca
+│   │   └── servicos/        # pdf, chunking, embeddings, busca, llm, rag, gerar, auditoria
 │   ├── alembic/versions/    # migrations: a fonte da verdade do schema
 │   ├── scripts/             # seed e experimento HNSW
 │   └── tests/
 ├── docs/
 │   ├── modelagem.md         # diagrama ER e decisões de banco
 │   ├── busca-semantica.md   # embeddings, pgvector, HNSW, full-text, híbrida
+│   ├── geracao-llm.md       # RAG, saída estruturada, N:N, alternativas, auditoria
+│   ├── exercicios.md        # exercícios de SQL por fase
 │   └── experimentos/        # resultados gerados por script
 └── frontend/                # fase 6
 ```
@@ -167,8 +203,10 @@ estuda-ai/
   transacional em background, chunking com sobreposição, embeddings locais, busca
   semântica (pgvector + HNSW), textual (tsvector + GIN) e híbrida (RRF), e experimento
   com `EXPLAIN ANALYZE`.
-- [ ] **Fase 3: geração com IA.** Flashcards e questões gerados pela API da
-  Anthropic a partir dos trechos (RAG).
+- [x] **Fase 3: geração com IA.** Perguntas ao material com citações, flashcards e
+  questões gerados pela API da Anthropic a partir dos trechos (RAG), deduplicação com
+  pgvector, alternativas em tabela com constraint adiada, tentativas e auditoria de custos
+  com `GROUP BY` por disciplina e mês.
 - [ ] **Fase 4: repetição espaçada.** Algoritmo SM-2, com a revisão gravada em
   transação (histórico em `revisoes` + estado atual em `flashcards`).
 - [ ] **Fase 5: dashboard.** Queries analíticas com `GROUP BY`, window functions e

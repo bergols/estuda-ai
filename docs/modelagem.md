@@ -5,7 +5,9 @@ migrations em `backend/alembic/versions/` (o DDL de fato) e `backend/app/models.
 (o espelho em SQLAlchemy). Se os dois divergirem, `alembic check` acusa.
 
 A busca (embeddings, HNSW, full-text, busca híbrida) tem documento próprio:
-[`busca-semantica.md`](busca-semantica.md).
+[`busca-semantica.md`](busca-semantica.md). A geração com LLM (RAG, alternativas em tabela
+contra JSONB, constraint adiada, deduplicação, auditoria) está em
+[`geracao-llm.md`](geracao-llm.md).
 
 Histórico de migrations:
 
@@ -16,6 +18,10 @@ Histórico de migrations:
 | `materiais_status_e_arquivo` | 2 | status `processado` → `concluido`; caminho, erro, páginas |
 | `trechos_disciplina_id_e_pagina_fim` | 2 | `disciplina_id` desnormalizado + FK composta; `pagina_fim` |
 | `busca_textual_em_trechos` | 2 | `unaccent`, config `portugues_unaccent`, `conteudo_tsv` + GIN |
+| `trechos_de_origem_nn` | 3 | `trecho_id` de flashcards/questões vira as tabelas N:N `flashcard_trechos` e `questao_trechos` |
+| `alternativas_em_tabela` | 3 | JSONB → tabela `alternativas`; `tentativas.alternativa_id` (FK composta); constraint trigger adiado |
+| `flashcards_embedding` | 3 | `flashcards.embedding vector(384)` para deduplicação |
+| `auditoria_geracoes` | 3 | tabela `geracoes`; `geracao_id` em flashcards/questões |
 
 > Dica de estudo: abra o `psql` e confira cada afirmação daqui.
 > `docker compose exec db psql -U estuda_ai -d estuda_ai` e depois `\d+ flashcards`.
@@ -31,10 +37,18 @@ erDiagram
     materiais ||--o{ trechos : "dividido em (CASCADE, FK composta)"
     disciplinas ||--o{ flashcards : "tem (CASCADE)"
     disciplinas ||--o{ questoes : "tem (CASCADE)"
-    trechos |o--o{ flashcards : "origina (SET NULL)"
-    trechos |o--o{ questoes : "origina (SET NULL)"
+    flashcards ||--o{ flashcard_trechos : "origem (CASCADE)"
+    trechos ||--o{ flashcard_trechos : "origem (CASCADE)"
+    questoes ||--o{ questao_trechos : "origem (CASCADE)"
+    trechos ||--o{ questao_trechos : "origem (CASCADE)"
     flashcards ||--o{ revisoes : "histórico (CASCADE)"
+    questoes ||--o{ alternativas : "tem (CASCADE)"
     questoes ||--o{ tentativas : "recebe (CASCADE)"
+    alternativas |o--o{ tentativas : "escolhida (FK composta)"
+    usuarios ||--o{ geracoes : "gastou (CASCADE)"
+    disciplinas |o--o{ geracoes : "SET NULL (disciplina_id)"
+    geracoes |o--o{ flashcards : "criou (SET NULL)"
+    geracoes |o--o{ questoes : "criou (SET NULL)"
 
     usuarios {
         bigint id PK
@@ -83,11 +97,12 @@ erDiagram
     flashcards {
         bigint id PK
         bigint disciplina_id FK
-        bigint trecho_id FK "nullable"
+        bigint geracao_id FK "nullable"
         text frente
         text verso
         text topico
         text origem "manual | ia"
+        vector embedding "vector(384), frente+verso; sem índice"
         numeric facilidade "SM-2, >= 1.30"
         int intervalo_dias
         int repeticoes
@@ -108,11 +123,10 @@ erDiagram
     questoes {
         bigint id PK
         bigint disciplina_id FK
-        bigint trecho_id FK "nullable"
+        bigint geracao_id FK "nullable"
         text enunciado
         text tipo "multipla_escolha | verdadeiro_falso | dissertativa"
-        jsonb alternativas
-        text resposta_correta
+        text resposta_correta "NULL em múltipla escolha"
         text explicacao
         smallint dificuldade "1..5"
         text topico
@@ -123,10 +137,41 @@ erDiagram
     tentativas {
         bigint id PK
         bigint questao_id FK
-        text resposta_dada
+        bigint alternativa_id FK "(questao_id, alternativa_id)"
+        text resposta_dada "outros tipos"
         boolean correta
         int tempo_ms
         timestamptz respondida_em
+    }
+    alternativas {
+        bigint id PK
+        bigint questao_id FK
+        text letra "A..E, única por questão"
+        text texto
+        boolean correta "no máx. 1 por questão"
+    }
+    flashcard_trechos {
+        bigint flashcard_id PK,FK
+        bigint trecho_id PK,FK
+    }
+    questao_trechos {
+        bigint questao_id PK,FK
+        bigint trecho_id PK,FK
+    }
+    geracoes {
+        bigint id PK
+        bigint usuario_id FK
+        bigint disciplina_id FK "nullable; FK composta com usuario_id"
+        text tipo "pergunta | flashcards | questoes"
+        text modelo
+        int tokens_entrada
+        int tokens_saida
+        numeric custo_usd "gravado no momento"
+        int duracao_ms
+        text status "sucesso | erro_validacao | erro_api"
+        smallint chamadas "1 ou 2"
+        text erro_mensagem
+        timestamptz criado_em
     }
 ```
 
@@ -264,10 +309,13 @@ Pedaços (*chunks*) do texto de um material, cada um com seu embedding.
 
 Pergunta (`frente`) e resposta (`verso`) para memorização.
 
-- `trecho_id ... ON DELETE SET NULL`: se o material de origem for apagado, o flashcard
-  **continua existindo** (você já o estudou; o histórico de revisões vale), só perde o
-  vínculo com a fonte. Compare com `CASCADE` em `disciplina_id`: apagar a disciplina
-  apaga os cards.
+- **Trechos de origem** ficam na tabela associativa `flashcard_trechos` (N:N, fase 3):
+  um card pode vir de vários trechos. Se o material de origem for apagado, só as
+  associações somem; o flashcard **continua existindo** (você já o estudou; o histórico de
+  revisões vale). Compare com `CASCADE` em `disciplina_id`: apagar a disciplina apaga os
+  cards. Na fase 1 era uma coluna `trecho_id ... ON DELETE SET NULL` (uma origem só).
+- `embedding` (frente + verso) serve para descartar cards gerados quase iguais aos
+  existentes; `geracao_id` diz qual chamada ao LLM criou o card. Ver `geracao-llm.md`.
 - **Estado atual do SM-2** (`facilidade`, `intervalo_dias`, `repeticoes`,
   `proxima_revisao`): veja a seção 4 — é uma desnormalização intencional.
 - `facilidade numeric(4,2)` em vez de `float`: `numeric` é **exato** (base 10). Com
@@ -290,24 +338,51 @@ Pergunta (`frente`) e resposta (`verso`) para memorização.
 
 Questões de prova (múltipla escolha, V/F, dissertativa).
 
-- `alternativas jsonb`: lista como `["A) ...", "B) ..."]`. A alternativa "pura" seria uma
-  tabela `alternativas(questao_id, letra, texto)`. Escolhemos `jsonb` porque alternativas
-  não têm vida própria: são sempre lidas e escritas junto com a questão, e nunca
-  consultadas sozinhas. **Regra prática:** se você vai filtrar, juntar ou referenciar o
-  dado por FK, ele merece uma tabela; se é um "anexo" lido inteiro, `jsonb` serve.
-- O `CHECK ck_questoes_alternativas_conforme_tipo` amarra coluna e tipo:
-  múltipla escolha exige um array com 2+ itens; os outros tipos exigem `NULL`. Usa `CASE`
-  aninhado porque o SQL **não garante a ordem de avaliação do `AND`**: em
+- **Alternativas** ficam na tabela `alternativas` desde a fase 3. Na fase 1 eram uma
+  coluna `jsonb` (`["A) ...", "B) ..."]`), com a justificativa de que alternativas não têm
+  vida própria e são sempre lidas junto com a questão. **Regra prática:** se você vai
+  filtrar, juntar ou **referenciar** o dado por FK, ele merece uma tabela; se é um "anexo"
+  lido inteiro, `jsonb` serve. Na fase 3 `tentativas` passou a referenciar a alternativa
+  escolhida, e a balança virou (comparação completa em `geracao-llm.md`, seção 4).
+- O antigo `CHECK ck_questoes_alternativas_conforme_tipo` usava `CASE` aninhado porque o
+  SQL **não garante a ordem de avaliação do `AND`**: em
   `jsonb_typeof(x) = 'array' AND jsonb_array_length(x) >= 2` o banco poderia avaliar o
-  segundo termo primeiro e dar erro num objeto. `CASE` garante a ordem.
+  segundo termo primeiro e dar erro num objeto. A regra equivalente hoje ("2+ alternativas
+  e exatamente 1 correta") envolve várias linhas e virou um **constraint trigger adiado**,
+  verificado no COMMIT.
+- `resposta_correta` é `NULL` em múltipla escolha (CHECK `ck_questoes_gabarito_conforme_tipo`):
+  o gabarito mora só em `alternativas.correta`, uma única fonte da verdade.
+
+### `alternativas` (fase 3)
+
+- `UNIQUE (questao_id, letra)`: letras não se repetem; também é o índice da FK `questao_id`.
+- `UNIQUE (questao_id, id)`: redundante com a PK, mas é o alvo da FK composta de `tentativas`.
+- Índice **único parcial** `(questao_id) WHERE correta`: no máximo uma correta por questão.
+  Só as linhas corretas entram no índice; é ele que impede uma segunda.
 
 ### `tentativas`
 
 **Histórico imutável** das respostas a questões.
 
 - Não tem `usuario_id`. Ver seção 5 (normalização).
+- `alternativa_id` (múltipla escolha) com **FK composta** `(questao_id, alternativa_id) →
+  alternativas(questao_id, id)`: a alternativa escolhida é obrigatoriamente da própria
+  questão. `resposta_dada` fica para os outros tipos; um CHECK exige um dos dois.
+- `correta` é gravada (não calculada na leitura): é o resultado **naquele momento**.
 - Índice `(questao_id, respondida_em)`: desempenho por questão ao longo do tempo
-  (base do dashboard da fase 5).
+  (base do dashboard da fase 5). Ele também atende a FK composta pelo prefixo `questao_id`.
+
+### `flashcard_trechos` e `questao_trechos` (fase 3)
+
+Tabelas associativas N:N: PK composta `(flashcard_id, trecho_id)` + índice em `trecho_id`.
+Ver `geracao-llm.md`, seção 3.
+
+### `geracoes` (fase 3)
+
+Auditoria de cada chamada ao LLM: tokens, custo (gravado no momento, como o preço no item
+de um pedido), duração e status. A FK composta `(disciplina_id, usuario_id)` com
+`ON DELETE SET NULL (disciplina_id)` mantém a auditoria e o dono quando a disciplina é
+apagada. Ver `geracao-llm.md`, seção 7.
 
 ---
 
@@ -383,8 +458,8 @@ coluna nova antes de preenchê-la.
 Resumo das formas normais aplicadas aqui:
 
 - **1FN** — valores atômicos, sem grupos repetidos. Ex.: não há colunas
-  `alternativa_a, alternativa_b, ...`. (O `jsonb` de `alternativas` é uma exceção
-  consciente; ver `questoes`.)
+  `alternativa_a, alternativa_b, ...`. (Na fase 1 o `jsonb` de alternativas era uma exceção
+  consciente; na fase 3 elas viraram tabela.)
 - **2FN** — nenhum atributo depende de *parte* de uma chave composta. Como todas as PKs
   são uma única coluna (`id`), a 2FN é automática.
 - **3FN** — nenhum atributo depende de outro atributo não-chave
@@ -401,7 +476,8 @@ Exceções conscientes (e onde estão documentadas):
 |---|---|---|
 | `flashcards` | estado do SM-2 copiado de `revisoes` | desempenho da consulta do dia (seção 4) |
 | `trechos.disciplina_id` | cópia de `materiais.disciplina_id` | filtro da busca junto do índice; protegida por FK composta (seção 4b) |
-| `questoes.alternativas` | lista em `jsonb` | dado sempre lido junto, nunca filtrado |
+| `geracoes.custo_usd` | derivável de tokens × preço | o preço muda; o histórico não (seção 7 de `geracao-llm.md`) |
+| `tentativas.correta` | derivável de `alternativas.correta` | é o resultado no momento da resposta |
 | `topico` (texto livre) | sem tabela própria | ainda não sabemos os tópicos; ver abaixo |
 
 **Problema conhecido, de propósito:** `topico` é texto livre em `flashcards` e `questoes`.
@@ -435,11 +511,20 @@ concreta em mente.
 | `ix_trechos_embedding_hnsw` | **HNSW** (pgvector) | busca semântica por similaridade |
 | `ix_trechos_conteudo_tsv` | **GIN** | busca textual (`@@`) |
 | `ix_flashcards_disciplina_proxima_revisao` | B-tree, composto | "o que revisar hoje" + FK `disciplina_id` |
-| `ix_flashcards_trecho_id` | B-tree, **parcial** | FK `trecho_id` (o `SET NULL` ao apagar trecho) |
+| `ix_flashcards_geracao_id` | B-tree, **parcial** | cards de uma geração + FK |
+| `pk_flashcard_trechos` | B-tree, único, composto | trechos de um card + FK `flashcard_id` |
+| `ix_flashcard_trechos_trecho_id` | B-tree | cards de um trecho + FK `trecho_id` |
 | `ix_revisoes_flashcard_revisado_em` | B-tree, composto | histórico de um card + FK |
 | `ix_questoes_disciplina_id` | B-tree | questões de uma disciplina + FK |
-| `ix_questoes_trecho_id` | B-tree, **parcial** | FK `trecho_id` |
-| `ix_tentativas_questao_respondida_em` | B-tree, composto | desempenho por questão + FK |
+| `ix_questoes_geracao_id` | B-tree, **parcial** | questões de uma geração + FK |
+| `pk_questao_trechos` / `ix_questao_trechos_trecho_id` | B-tree | idem, para questões |
+| `uq_alternativas_questao_id_letra` | B-tree, único, composto | alternativas em ordem + FK `questao_id` |
+| `uq_alternativas_questao_id_id` | B-tree, único, composto | alvo da FK composta de `tentativas` |
+| `uq_alternativas_uma_correta` | B-tree, único, **parcial** | no máximo 1 correta por questão |
+| `ix_tentativas_questao_respondida_em` | B-tree, composto | desempenho por questão + FKs (prefixo) |
+| `uq_disciplinas_id_usuario_id` | B-tree, único, composto | alvo da FK composta de `geracoes` |
+| `ix_geracoes_usuario_criado_em` | B-tree, composto | relatório de gastos do usuário + FK |
+| `ix_geracoes_disciplina_id` | B-tree, **parcial** | `SET NULL` ao apagar disciplina |
 
 ### B-tree
 
@@ -452,9 +537,11 @@ para essa consulta.
 
 ### Índice parcial
 
-`CREATE INDEX ... ON flashcards (trecho_id) WHERE trecho_id IS NOT NULL` só indexa as
-linhas que satisfazem o `WHERE`. Cards criados manualmente (sem trecho) não ocupam
-espaço no índice — e nunca seriam procurados por `trecho_id = ?` mesmo.
+`CREATE INDEX ... ON flashcards (geracao_id) WHERE geracao_id IS NOT NULL` só indexa as
+linhas que satisfazem o `WHERE`. Cards criados manualmente (sem geração) não ocupam
+espaço no índice — e nunca seriam procurados por `geracao_id = ?` mesmo. Um índice
+parcial também pode ser **único**: `uq_alternativas_uma_correta` só contém as alternativas
+corretas, então "único" ali significa "no máximo uma correta por questão".
 
 ### HNSW (busca vetorial)
 
@@ -495,9 +582,12 @@ seção 6.
 | usuário | `CASCADE` → disciplinas → materiais, trechos, flashcards, revisões, questões, tentativas | tudo pertence ao usuário |
 | disciplina | `CASCADE` → materiais, flashcards, questões (e descendentes) | conteúdo da disciplina |
 | material | `CASCADE` → trechos (pela FK composta) | trechos são pedaços do material |
-| trecho | `SET NULL` em `flashcards.trecho_id` e `questoes.trecho_id` | o card/questão sobrevive à fonte |
-| flashcard | `CASCADE` → revisões | histórico sem card não tem sentido |
-| questão | `CASCADE` → tentativas | idem |
+| trecho | `CASCADE` em `flashcard_trechos`/`questao_trechos` (só a associação) | o card/questão sobrevive à fonte |
+| flashcard | `CASCADE` → revisões, associações | histórico sem card não tem sentido |
+| questão | `CASCADE` → alternativas, tentativas, associações | idem |
+| alternativa | `NO ACTION` se já foi escolhida numa tentativa | preserva o histórico; apagar a questão inteira funciona |
+| disciplina (em `geracoes`) | `SET NULL (disciplina_id)` | a auditoria do gasto sobrevive e mantém o dono |
+| geração | `SET NULL` em `flashcards.geracao_id`/`questoes.geracao_id` | o conteúdo sobrevive à auditoria |
 
 Atualizar `materiais.disciplina_id` propaga para `trechos.disciplina_id`
 (`ON UPDATE CASCADE` da FK composta).

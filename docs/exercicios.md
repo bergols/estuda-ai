@@ -162,11 +162,11 @@ leia a mensagem da FK composta.
 
 ## Fase 3 — Geração com LLM, tabelas associativas e auditoria
 
-Material de apoio: `geracao-llm.md` (escrito no fim da Fase 3). Estas tabelas chegam com
-as migrations da Fase 3: `geracoes`, `alternativas`, `flashcard_trechos`,
-`questao_trechos`, além das colunas `tentativas.alternativa_id` e
-`flashcards.geracao_id`/`questoes.geracao_id`. Para ter dados, gere alguns flashcards e
-questões pela API e responda algumas questões (inclusive errando de propósito).
+Material de apoio: [`geracao-llm.md`](geracao-llm.md). Tabelas da fase: `geracoes`,
+`alternativas`, `flashcard_trechos`, `questao_trechos`, além das colunas
+`tentativas.alternativa_id` e `flashcards.geracao_id`/`questoes.geracao_id`. Para ter dados,
+gere alguns flashcards e questões pela API e responda algumas questões (inclusive errando de
+propósito).
 
 ### 3.1 Gastos com subtotais (ROLLUP) e o fuso horário
 
