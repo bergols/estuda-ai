@@ -9,7 +9,8 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
 
 - **Explique as decisões de banco.** Em commits e em `docs/` (`modelagem.md` para o
   schema, `busca-semantica.md` para busca/índices/transações do pipeline,
-  `geracao-llm.md` para LLM/RAG/auditoria), diga o
+  `geracao-llm.md` para LLM/RAG/auditoria, `repeticao-espacada.md` para SM-2/fila/
+  concorrência/fuso), diga o
   *porquê* (alternativas consideradas, custo/benefício), não só o quê. Didático,
   em português.
 - **Commits pequenos, Conventional Commits em português** (`feat:`, `fix:`, `docs:`,
@@ -21,9 +22,10 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
 ## Estado atual
 
 Fases 1 (fundação + modelagem), 2 (upload de PDF, embeddings, busca semântica/textual/
-híbrida, experimento HNSW) e 3 (RAG com a API da Anthropic: perguntar, flashcards,
-questões, tentativas, auditoria de custos) concluídas. Próxima: fase 4 (SM-2). Roadmap no
-`README.md`. Exercícios de SQL por fase em `docs/exercicios.md` (sem respostas; o autor
+híbrida, experimento HNSW), 3 (RAG com a API da Anthropic: perguntar, flashcards,
+questões, tentativas, auditoria de custos) e 4 (SM-2, fila do dia, concorrência, fuso)
+concluídas. Próxima: fase 5 (dashboard com queries analíticas). Roadmap no `README.md`.
+Pendente da fase 3: o teste real com a API (falta `ANTHROPIC_API_KEY` no `.env`). Exercícios de SQL por fase em `docs/exercicios.md` (sem respostas; o autor
 preenche "Minha resposta:").
 
 ## Comandos
@@ -38,6 +40,9 @@ docker compose exec db psql -U estuda_ai -d estuda_ai
 docker compose exec backend python -m scripts.seed_experimento   # 50 mil trechos sintéticos
 docker compose exec backend python -m scripts.experimento_hnsw   # regenera docs/experimentos/hnsw.md
 ```
+
+Seeds: `scripts/seed_experimento.py` (50 mil trechos sintéticos, fase 2) e
+`scripts/seed_revisoes.py` (estudante@estuda-ai.local, 6 semanas de estudo simuladas, fase 4).
 
 Docker aqui é **Colima** (`colima start` se o socket não responder). Testes também
 rodam no host com `uv run pytest`, sobrescrevendo `DATABASE_URL`/`TEST_DATABASE_URL`
@@ -90,14 +95,32 @@ Armadilhas de ambiente já encontradas:
   com `USING CONSTRAINT = '<nome>'`. O teardown dos testes roda `SET CONSTRAINTS ALL IMMEDIATE`.
 - Relação N:N = tabela associativa com PK composta + índice na 2ª coluna
   (`flashcard_trechos`, `questao_trechos`).
-- Escritas que mexem em mais de uma tabela (ex. revisão SM-2: `INSERT revisoes` +
-  `UPDATE flashcards`; trechos + status do material) vão na **mesma transação**.
+- Escritas que mexem em mais de uma tabela (ex. revisão SM-2: `UPDATE revisoes` +
+  `INSERT historico_revisoes`; trechos + status do material) vão na **mesma transação**.
 - Transições de estado com compare-and-set: `UPDATE ... WHERE id = ? AND status = 'x'
   RETURNING`; 0 linhas = outro processo chegou antes. Trabalho pesado (CPU, rede, LLM)
   fica **fora** de transação aberta.
 - Arquivos ficam no volume `uploads`; o banco guarda o caminho relativo. Disco e banco
   não têm transação comum: no upload, apagar o arquivo se o INSERT falhar; no delete,
   apagar o arquivo só depois do COMMIT.
+
+## Repetição espaçada (fase 4)
+
+- Estado do SM-2 em `revisoes` (1:1, PK = FK, criado por trigger no INSERT do card);
+  histórico em `historico_revisoes` (só INSERT; trigger recusa UPDATE). `flashcards` não
+  tem mais colunas do SM-2.
+- SM-2 usado pela API: `app/servicos/sm2.py` (Decimal + ROUND_HALF_UP). A função `sm2()`
+  em PL/pgSQL é só experimento; `tests/test_sm2.py` confere que as duas concordam. Mudou a
+  fórmula? Mude as duas (nova migration para a função).
+- Concorrência: controle otimista (`UPDATE ... WHERE versao = :v RETURNING`; 0 linhas =
+  409). Testes de concorrência real em `tests/test_concorrencia.py` (conexões próprias,
+  dados commitados, `Barrier`).
+- Tempo: `timestamptz` sempre; "hoje" = próxima meia-noite no `usuarios.fuso_horario`
+  (`SQL_FIM_DE_HOJE` em `app/servicos/revisao.py`). Nunca `now()::date` nem o fuso do servidor.
+  Funções de serviço aceitam `agora=` para testes.
+- Fila do dia: índice `(disciplina_id, proxima_revisao)`; a fila do usuário inteiro usa
+  `CROSS JOIN LATERAL` por disciplina (top-N por grupo). Evite `(:p IS NULL OR col = :p)`:
+  escreva duas consultas.
 
 ## LLM (fase 3)
 

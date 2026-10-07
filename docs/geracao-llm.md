@@ -308,7 +308,7 @@ A amostra é pequena (16 pares); com uso real, vale recalibrar com os descartes 
 ### Detalhes de banco
 
 - **Sem índice vetorial em `flashcards.embedding`**: a comparação é sempre dentro de uma
-  disciplina (dezenas a centenas de cards). O índice `(disciplina_id, proxima_revisao)`
+  disciplina (dezenas a centenas de cards). O índice `ix_flashcards_disciplina_id`
   entrega esse subconjunto e a distância é calculada para cada um: busca **exata**, recall
   100%. É a mesma conclusão do experimento da Fase 2 para disciplinas pequenas.
 - **Duplicatas dentro do próprio lote**: a consulta roda dentro da transação que está

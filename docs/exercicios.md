@@ -31,10 +31,14 @@ Dentro de uma transação, crie um usuário e uma disciplina. Depois **escreva s
 previsão** (passa ou falha? qual constraint?) para cada item abaixo, e só então execute:
 
 - (a) um segundo usuário com o mesmo e-mail do primeiro, mas com letras maiúsculas;
-- (b) um flashcard com `facilidade = 1.29`;
-- (c) um flashcard com `facilidade` omitida;
+- (b) um `UPDATE` que põe `facilidade = 1.29` no estado de um card (`revisoes`);
+- (c) um flashcard sem dizer nada sobre o SM-2: o que aparece em `revisoes` para ele, e quem
+  criou essa linha?
 - (d) um trecho com `pagina = NULL` e outro com `pagina = 0`;
-- (e) uma revisão com `proxima_revisao` anterior a `revisado_em`.
+- (e) uma linha em `historico_revisoes` com `proxima_revisao_nova` anterior a `revisado_em`.
+
+> Desde a Fase 4, o estado do SM-2 fica em `revisoes` (1:1 com o card) e o histórico em
+> `historico_revisoes`; este exercício já usa o esquema atual.
 
 Perguntas: por que (d) se comporta diferente nos dois casos? O que acontece com os
 comandos seguintes depois do primeiro erro dentro da transação, e como continuar sem
@@ -227,6 +231,100 @@ Dentro de `BEGIN; ... ROLLBACK;`:
 Perguntas: por que a regra "pelo menos 2 alternativas e exatamente 1 correta" não cabe
 num `CHECK`? Por que ela precisa ser **adiada** e não imediata? Em (d), por que uma
 coluna `flashcards.trecho_id` não conseguiria guardar essa informação?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+---
+
+## Fase 4 — Repetição espaçada, estado × histórico, tempo e concorrência
+
+Material de apoio: [`repeticao-espacada.md`](repeticao-espacada.md) e
+[`experimentos/fila-do-dia.md`](experimentos/fila-do-dia.md). Rode antes o seed que simula
+6 semanas de estudo:
+
+```bash
+docker compose exec backend python -m scripts.seed_revisoes
+```
+
+### 4.1 O que o histórico conta (e o estado não)
+
+Usando só `historico_revisoes` (com JOINs até a disciplina do usuário
+`estudante@estuda-ai.local`):
+
+- (a) a taxa de acerto (nota ≥ 3) por disciplina e por **semana**, com a semana calculada no
+  fuso de São Paulo (dica: `date_trunc('week', revisado_em AT TIME ZONE ...)` e
+  `count(*) FILTER (WHERE ...)`);
+- (b) o atraso médio, em dias, de cada revisão (`revisado_em - proxima_revisao_anterior`),
+  por disciplina, separando revisões feitas em dia de semana das feitas no fim de semana;
+- (c) o número de revisões por dia e a **média móvel de 7 dias** desse número
+  (dica: `avg(...) OVER (ORDER BY dia ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)`).
+  Os dias sem revisão aparecem? Como fazer aparecerem (dica: `generate_series`)?
+
+Perguntas: qual dessas perguntas daria para responder só com a tabela `revisoes` (o estado)?
+Por que o histórico guarda o estado *anterior* se ele é igual ao *novo* da linha de antes?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 4.2 O estado é derivável do histórico?
+
+- (a) para cada card, pegue a **última** linha do histórico de três jeitos: `DISTINCT ON`,
+  `row_number() OVER (...)` e `LATERAL (... ORDER BY ... LIMIT 1)`. Compare os planos com
+  `EXPLAIN ANALYZE`. Qual índice os três aproveitam?
+- (b) compare essa última linha com `revisoes` (facilidade, intervalo, repetições, próxima
+  revisão) e liste as divergências (deveria dar zero linhas; dica: `EXCEPT`). E a `versao`:
+  ela bate com a contagem de linhas do histórico de cada card?
+- (c) tente `UPDATE historico_revisoes SET nota = 5 WHERE ...`. Que objeto do banco impede, e
+  por que um `REVOKE UPDATE` não teria o mesmo efeito para o usuário `estuda_ai`?
+- (d) usando a função `sm2()` do banco, simule: "se todas as notas 3 de um card tivessem sido
+  4, qual seria a facilidade final?" (dica: uma CTE recursiva que reaplica `sm2()` revisão a
+  revisão, na ordem de `revisado_em`).
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 4.3 Tempo e concorrência na prática
+
+**Parte A, fuso e horário de verão.** No psql:
+
+```sql
+SET TIME ZONE 'America/New_York';
+SELECT timestamptz '2026-10-31 12:00' + interval '1 day',
+       timestamptz '2026-10-31 12:00' + interval '24 hours';
+```
+
+- (a) por que os dois resultados diferem? O que acontece com a mesma conta em
+  `SET TIME ZONE 'America/Sao_Paulo'`?
+- (b) escreva a expressão do "fim de hoje" de um usuário em Tóquio e de um em São Paulo
+  para o mesmo instante `timestamptz '2026-10-07 22:30-03'`. Em que data cai cada um?
+- (c) por que `now()::date` numa sessão em UTC é um jeito errado de calcular "hoje" para um
+  aluno brasileiro?
+
+**Parte B, o duplo clique em dois psql.** Escolha um card do estudante e veja sua `versao`.
+Nos terminais A e B, dentro de `BEGIN;`:
+
+```sql
+UPDATE revisoes SET repeticoes = repeticoes + 1, versao = versao + 1,
+                    ultima_revisao_em = now(), proxima_revisao = now() + interval '1 day'
+WHERE flashcard_id = <id> AND versao = <versão que você viu>
+RETURNING versao;
+```
+
+- (d) o que B faz enquanto A não dá COMMIT? Quantas linhas B atualiza depois do COMMIT de A?
+  Repita com `SELECT ... FOR UPDATE` seguido do `UPDATE` sem o `AND versao = ...` e compare.
+- (e) por que a fila do usuário inteiro usa `CROSS JOIN LATERAL` e a de uma disciplina não?
+  Rode `EXPLAIN ANALYZE` nas duas formas (JOIN simples e LATERAL) para o estudante e compare
+  os planos.
 
 **Minha resposta:**
 

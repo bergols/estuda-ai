@@ -8,8 +8,8 @@ desempenho por disciplina e tópico.
 É um projeto de portfólio com um objetivo paralelo: **aprender banco de dados a fundo**
 (PostgreSQL, modelagem, índices, transações e busca vetorial). Por isso as decisões de
 banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/modelagem.md),
-[busca semântica](docs/busca-semantica.md), [geração com LLM](docs/geracao-llm.md) e
-[exercícios de SQL](docs/exercicios.md).
+[busca semântica](docs/busca-semantica.md), [geração com LLM](docs/geracao-llm.md),
+[repetição espaçada](docs/repeticao-espacada.md) e [exercícios de SQL](docs/exercicios.md).
 
 ## Stack
 
@@ -169,6 +169,30 @@ curl localhost:8000/gastos -H 'X-Usuario-Id: 1'
 
 Nos testes a API da Anthropic é sempre simulada: nenhum teste gasta tokens.
 
+### Revisão com repetição espaçada
+
+Cards vencidos até o fim de hoje (no fuso do usuário), do mais atrasado ao menos:
+
+```bash
+curl 'localhost:8000/revisoes/hoje?limite=10' -H 'X-Usuario-Id: 1'
+```
+
+Registre a nota (0 a 5) mandando a `versao` que veio na fila (409 se o card mudou desde então):
+
+```bash
+curl -X POST localhost:8000/revisoes/1 -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"nota":4,"versao":0}'
+```
+
+Dados realistas (6 semanas simuladas) e o experimento do índice da fila:
+
+```bash
+docker compose exec backend python -m scripts.seed_revisoes
+```
+
+```bash
+docker compose exec backend python -m scripts.experimento_fila
+```
+
 ## Estrutura
 
 ```
@@ -181,14 +205,15 @@ estuda-ai/
 │   │   ├── schemas.py       # contratos Pydantic da API
 │   │   ├── deps.py          # dependências (sessão, usuário atual, embedder)
 │   │   ├── routers/         # rotas por recurso
-│   │   └── servicos/        # pdf, chunking, embeddings, busca, llm, rag, gerar, auditoria
+│   │   └── servicos/        # pdf, chunking, embeddings, busca, llm, rag, gerar, sm2, revisao
 │   ├── alembic/versions/    # migrations: a fonte da verdade do schema
-│   ├── scripts/             # seed e experimento HNSW
+│   ├── scripts/             # seeds e experimentos (HNSW, fila do dia)
 │   └── tests/
 ├── docs/
 │   ├── modelagem.md         # diagrama ER e decisões de banco
 │   ├── busca-semantica.md   # embeddings, pgvector, HNSW, full-text, híbrida
 │   ├── geracao-llm.md       # RAG, saída estruturada, N:N, alternativas, auditoria
+│   ├── repeticao-espacada.md # SM-2, estado x histórico, fila, concorrência, fuso
 │   ├── exercicios.md        # exercícios de SQL por fase
 │   └── experimentos/        # resultados gerados por script
 └── frontend/                # fase 6
@@ -207,8 +232,10 @@ estuda-ai/
   questões gerados pela API da Anthropic a partir dos trechos (RAG), deduplicação com
   pgvector, alternativas em tabela com constraint adiada, tentativas e auditoria de custos
   com `GROUP BY` por disciplina e mês.
-- [ ] **Fase 4: repetição espaçada.** Algoritmo SM-2, com a revisão gravada em
-  transação (histórico em `revisoes` + estado atual em `flashcards`).
+- [x] **Fase 4: repetição espaçada.** SM-2 (Python, conferido contra uma versão
+  PL/pgSQL), estado 1:1 em `revisoes` + histórico imutável, fila do dia no fuso do usuário
+  com índice provado por `EXPLAIN ANALYZE`, controle otimista de concorrência e seed com 6
+  semanas de estudo simuladas.
 - [ ] **Fase 5: dashboard.** Queries analíticas com `GROUP BY`, window functions e
   views. Normalização de tópicos numa tabela própria.
 - [ ] **Fase 6: frontend e otimização.** Next.js, autenticação, fila de processamento

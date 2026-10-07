@@ -7,7 +7,8 @@ migrations em `backend/alembic/versions/` (o DDL de fato) e `backend/app/models.
 A busca (embeddings, HNSW, full-text, busca híbrida) tem documento próprio:
 [`busca-semantica.md`](busca-semantica.md). A geração com LLM (RAG, alternativas em tabela
 contra JSONB, constraint adiada, deduplicação, auditoria) está em
-[`geracao-llm.md`](geracao-llm.md).
+[`geracao-llm.md`](geracao-llm.md). A repetição espaçada (SM-2, estado × histórico, fila do
+dia, concorrência, fuso horário) está em [`repeticao-espacada.md`](repeticao-espacada.md).
 
 Histórico de migrations:
 
@@ -22,6 +23,9 @@ Histórico de migrations:
 | `alternativas_em_tabela` | 3 | JSONB → tabela `alternativas`; `tentativas.alternativa_id` (FK composta); constraint trigger adiado |
 | `flashcards_embedding` | 3 | `flashcards.embedding vector(384)` para deduplicação |
 | `auditoria_geracoes` | 3 | tabela `geracoes`; `geracao_id` em flashcards/questões |
+| `estado_sm2_em_revisoes` | 4 | `revisoes` → `historico_revisoes` (antes/depois, imutável); nova `revisoes` = estado 1:1; SM-2 sai de `flashcards` |
+| `fuso_horario_do_usuario` | 4 | `usuarios.fuso_horario`, validado por trigger |
+| `funcao_sm2_plpgsql` | 4 | função `sm2()` em PL/pgSQL (experimento) |
 
 > Dica de estudo: abra o `psql` e confira cada afirmação daqui.
 > `docker compose exec db psql -U estuda_ai -d estuda_ai` e depois `\d+ flashcards`.
@@ -41,7 +45,8 @@ erDiagram
     trechos ||--o{ flashcard_trechos : "origem (CASCADE)"
     questoes ||--o{ questao_trechos : "origem (CASCADE)"
     trechos ||--o{ questao_trechos : "origem (CASCADE)"
-    flashcards ||--o{ revisoes : "histórico (CASCADE)"
+    flashcards ||--|| revisoes : "estado SM-2 1:1 (CASCADE, FK composta)"
+    flashcards ||--o{ historico_revisoes : "histórico (CASCADE)"
     questoes ||--o{ alternativas : "tem (CASCADE)"
     questoes ||--o{ tentativas : "recebe (CASCADE)"
     alternativas |o--o{ tentativas : "escolhida (FK composta)"
@@ -54,6 +59,7 @@ erDiagram
         bigint id PK
         text nome
         text email UK "único em lower(email)"
+        text fuso_horario "padrão America/Sao_Paulo"
         timestamptz criado_em
         timestamptz atualizado_em
     }
@@ -103,22 +109,33 @@ erDiagram
         text topico
         text origem "manual | ia"
         vector embedding "vector(384), frente+verso; sem índice"
-        numeric facilidade "SM-2, >= 1.30"
-        int intervalo_dias
-        int repeticoes
-        timestamptz proxima_revisao
         timestamptz criado_em
         timestamptz atualizado_em
     }
     revisoes {
-        bigint id PK
-        bigint flashcard_id FK
-        smallint qualidade "0..5"
-        numeric facilidade
+        bigint flashcard_id PK,FK "1:1 com o card"
+        bigint disciplina_id FK "cópia; FK composta"
+        numeric facilidade "SM-2, >= 1.30"
         int intervalo_dias
         int repeticoes
-        timestamptz proxima_revisao
-        timestamptz revisado_em
+        timestamptz proxima_revisao "índice (disciplina_id, proxima_revisao)"
+        timestamptz ultima_revisao_em
+        int versao "controle otimista"
+        timestamptz atualizado_em
+    }
+    historico_revisoes {
+        bigint id PK
+        bigint flashcard_id FK
+        smallint nota "0..5"
+        numeric facilidade_anterior
+        numeric facilidade_nova
+        int intervalo_anterior
+        int intervalo_novo
+        int repeticoes_anterior
+        int repeticoes_nova
+        timestamptz proxima_revisao_anterior
+        timestamptz proxima_revisao_nova
+        timestamptz revisado_em "só INSERT"
     }
     questoes {
         bigint id PK
@@ -208,8 +225,9 @@ sessão ao exibir. `timestamp` (sem tz) guarda "uma data no calendário" sem diz
 - `atualizado_em` é mantido por um **trigger** `BEFORE UPDATE` (função
   `definir_atualizado_em()`). Ele fica no banco — e não só no ORM — para funcionar
   também quando alguém faz `UPDATE` direto no `psql`.
-- Tabelas de **histórico** (`revisoes`, `tentativas`) e `trechos` são imutáveis
-  (só recebem `INSERT`), então não têm `atualizado_em`.
+- Tabelas de **histórico** (`historico_revisoes`, `tentativas`) e `trechos` são imutáveis
+  (só recebem `INSERT`), então não têm `atualizado_em`. Em `historico_revisoes` a
+  imutabilidade é garantida por um trigger que recusa `UPDATE`.
 - Detalhe: `now()` retorna o horário de **início da transação**. Tudo que acontece na
   mesma transação recebe o mesmo instante (`clock_timestamp()` daria o horário real).
 
@@ -316,21 +334,35 @@ Pergunta (`frente`) e resposta (`verso`) para memorização.
   cards. Na fase 1 era uma coluna `trecho_id ... ON DELETE SET NULL` (uma origem só).
 - `embedding` (frente + verso) serve para descartar cards gerados quase iguais aos
   existentes; `geracao_id` diz qual chamada ao LLM criou o card. Ver `geracao-llm.md`.
-- **Estado atual do SM-2** (`facilidade`, `intervalo_dias`, `repeticoes`,
-  `proxima_revisao`): veja a seção 4 — é uma desnormalização intencional.
+- O **estado do SM-2** não fica aqui desde a fase 4: está em `revisoes`, uma tabela 1:1
+  (seção 4). Até a fase 3 ele era uma cópia em colunas de `flashcards`.
+
+### `revisoes` (estado do SM-2, fase 4)
+
+**Uma linha por card** com o estado atual: facilidade, intervalo, repetições, próxima
+revisão, última revisão e `versao`.
+
+- `flashcard_id` é PK **e** FK: relação 1:1. Um trigger `AFTER INSERT ON flashcards` cria a
+  linha, então todo card nasce com estado (e com `proxima_revisao = now()`: já aparece para
+  estudo).
 - `facilidade numeric(4,2)` em vez de `float`: `numeric` é **exato** (base 10). Com
   `float`, `2.5 - 0.14 - 0.14 ...` acumula erros de arredondamento binário. O SM-2 define
   o fator com 2 casas e mínimo 1.3 — o `CHECK (facilidade >= 1.30)` impõe isso.
-- Card novo nasce com `proxima_revisao = now()`: já aparece para estudo.
+- `versao`: controle otimista de concorrência (soma 1 a cada revisão).
+  `CHECK ((versao = 0) = (ultima_revisao_em IS NULL))`.
+- `disciplina_id`: cópia protegida por FK composta, para a fila do dia filtrar sem JOIN.
+- Índice `(disciplina_id, proxima_revisao)`: a fila do dia. Ver `repeticao-espacada.md`,
+  seção 3, e o experimento em `experimentos/fila-do-dia.md`.
 
-### `revisoes`
+### `historico_revisoes` (fase 4; era `revisoes` nas fases 1–3)
 
-**Histórico imutável**: uma linha por revisão feita. Guarda a nota dada (`qualidade`,
-0–5 no SM-2) e o estado resultante.
+**Histórico imutável**: uma linha por revisão feita, com a nota (0–5) e o estado **antes**
+(`_anterior`) e **depois** (`_nova`).
 
-- `CHECK (proxima_revisao >= revisado_em)`: uma revisão nunca agenda a próxima para o
+- `CHECK (proxima_revisao_nova >= revisado_em)`: uma revisão nunca agenda a próxima para o
   passado. É uma constraint que compara **duas colunas da mesma linha** — CHECK pode
   fazer isso; o que CHECK não pode é olhar outras linhas ou outras tabelas.
+- Trigger `trg_historico_revisoes_imutavel` recusa `UPDATE` (só INSERT; DELETE pela cascata).
 - Índice `(flashcard_id, revisado_em)`: "histórico deste card em ordem" sai direto do
   índice, sem ordenar depois.
 
@@ -388,30 +420,34 @@ apagada. Ver `geracao-llm.md`, seção 7.
 
 ## 4. A desnormalização consciente: estado do SM-2
 
-O estado atual de um flashcard **pode ser derivado** de `revisoes` (é a última linha).
-Guardá-lo também em `flashcards` é redundância — portanto, desnormalização. Por que fazer?
+O estado atual de um flashcard **pode ser derivado** do histórico: é o resultado da última
+revisão (ou o estado inicial, se nunca foi revisado). Guardá-lo também em `revisoes` é
+redundância — portanto, desnormalização. Por que fazer?
 
-A consulta mais frequente do app é *"quais cards eu devo revisar agora?"*:
+A consulta mais frequente do app é *"quais cards eu devo revisar hoje?"*:
 
 ```sql
-SELECT f.*
-FROM flashcards f
-WHERE f.disciplina_id = :disciplina
-  AND f.proxima_revisao <= now()
-ORDER BY f.proxima_revisao
+SELECT ... FROM revisoes r
+WHERE r.disciplina_id = :disciplina AND r.proxima_revisao < :fim_de_hoje
+ORDER BY r.proxima_revisao
 LIMIT 20;
 ```
 
-Com o estado em `flashcards`, ela usa o índice `(disciplina_id, proxima_revisao)`:
+Com o estado guardado, ela usa o índice `(disciplina_id, proxima_revisao)`:
 o Postgres pula direto para a disciplina e lê os cards já em ordem de data, parando
-no 20º. Sem o cache, seria preciso achar **a última revisão de cada card** antes de
+no 20º. Sem ele, seria preciso achar **a última revisão de cada card** antes de
 filtrar — algo como `DISTINCT ON (flashcard_id) ... ORDER BY flashcard_id, revisado_em DESC`
 ou um `LATERAL` — muito mais trabalho a cada abertura da tela.
 
 **O preço:** as duas cópias podem divergir. A regra é que **toda revisão grava as duas
-coisas na mesma transação** (`INSERT INTO revisoes` + `UPDATE flashcards`). Se uma falhar,
-o `ROLLBACK` desfaz a outra — é exatamente para isso que transações existem (o "A" de
-ACID, atomicidade). Isso será implementado na fase 4.
+coisas na mesma transação** (`UPDATE revisoes` + `INSERT INTO historico_revisoes`). Se uma
+falhar, o `ROLLBACK` desfaz a outra — é exatamente para isso que transações existem (o "A" de
+ACID, atomicidade). Implementado e testado na fase 4.
+
+**Onde guardar o estado:** nas fases 1–3 eram colunas de `flashcards`. Na fase 4 o estado
+foi para uma tabela 1:1 estreita (`revisoes`): no Postgres, `UPDATE` grava uma versão nova
+da linha **inteira** (MVCC), e a linha de `flashcards` tem texto e um embedding de 1,5 KB.
+Detalhes em `repeticao-espacada.md`, seção 2.
 
 ---
 
@@ -474,7 +510,8 @@ Exceções conscientes (e onde estão documentadas):
 
 | Onde | O quê | Por quê |
 |---|---|---|
-| `flashcards` | estado do SM-2 copiado de `revisoes` | desempenho da consulta do dia (seção 4) |
+| `revisoes` | estado do SM-2, derivável de `historico_revisoes` | desempenho da fila do dia (seção 4) |
+| `revisoes.disciplina_id` | cópia de `flashcards.disciplina_id` | filtro da fila sem JOIN; protegida por FK composta |
 | `trechos.disciplina_id` | cópia de `materiais.disciplina_id` | filtro da busca junto do índice; protegida por FK composta (seção 4b) |
 | `geracoes.custo_usd` | derivável de tokens × preço | o preço muda; o histórico não (seção 7 de `geracao-llm.md`) |
 | `tentativas.correta` | derivável de `alternativas.correta` | é o resultado no momento da resposta |
@@ -510,11 +547,14 @@ concreta em mente.
 | `ix_trechos_disciplina_id` | B-tree | busca exata em disciplina pequena; filtro da busca textual |
 | `ix_trechos_embedding_hnsw` | **HNSW** (pgvector) | busca semântica por similaridade |
 | `ix_trechos_conteudo_tsv` | **GIN** | busca textual (`@@`) |
-| `ix_flashcards_disciplina_proxima_revisao` | B-tree, composto | "o que revisar hoje" + FK `disciplina_id` |
+| `ix_flashcards_disciplina_id` | B-tree | FK `disciplina_id` + cards de uma disciplina (deduplicação) |
+| `uq_flashcards_id_disciplina_id` | B-tree, único, composto | alvo da FK composta de `revisoes` |
+| `pk_revisoes` | B-tree, único | estado de um card (1:1) |
+| `ix_revisoes_disciplina_proxima_revisao` | B-tree, composto | **fila do dia** (provado com EXPLAIN ANALYZE) |
 | `ix_flashcards_geracao_id` | B-tree, **parcial** | cards de uma geração + FK |
 | `pk_flashcard_trechos` | B-tree, único, composto | trechos de um card + FK `flashcard_id` |
 | `ix_flashcard_trechos_trecho_id` | B-tree | cards de um trecho + FK `trecho_id` |
-| `ix_revisoes_flashcard_revisado_em` | B-tree, composto | histórico de um card + FK |
+| `ix_historico_revisoes_flashcard_revisado_em` | B-tree, composto | histórico de um card + FK |
 | `ix_questoes_disciplina_id` | B-tree | questões de uma disciplina + FK |
 | `ix_questoes_geracao_id` | B-tree, **parcial** | questões de uma geração + FK |
 | `pk_questao_trechos` / `ix_questao_trechos_trecho_id` | B-tree | idem, para questões |
@@ -533,7 +573,10 @@ concreta em mente.
 ordenadas por `a` e, empatando, por `b`. Por isso `(disciplina_id, proxima_revisao)`
 responde "disciplina = X **e** data ≤ agora, em ordem de data" lendo um trecho contíguo
 do índice. A ordem das colunas importa: `(proxima_revisao, disciplina_id)` seria bem pior
-para essa consulta.
+para essa consulta. Medido na fase 4 (`experimentos/fila-do-dia.md`): 0,06 ms contra 0,52 ms,
+e a diferença cresce com o número de usuários. O outro lado: o composto **não** entrega em
+ordem de data as linhas de várias disciplinas juntas, e a fila do usuário inteiro precisou
+de um `LATERAL` (top-N por grupo) para aproveitá-lo.
 
 ### Índice parcial
 
@@ -583,7 +626,7 @@ seção 6.
 | disciplina | `CASCADE` → materiais, flashcards, questões (e descendentes) | conteúdo da disciplina |
 | material | `CASCADE` → trechos (pela FK composta) | trechos são pedaços do material |
 | trecho | `CASCADE` em `flashcard_trechos`/`questao_trechos` (só a associação) | o card/questão sobrevive à fonte |
-| flashcard | `CASCADE` → revisões, associações | histórico sem card não tem sentido |
+| flashcard | `CASCADE` → estado (`revisoes`), histórico, associações | histórico sem card não tem sentido |
 | questão | `CASCADE` → alternativas, tentativas, associações | idem |
 | alternativa | `NO ACTION` se já foi escolhida numa tentativa | preserva o histórico; apagar a questão inteira funciona |
 | disciplina (em `geracoes`) | `SET NULL (disciplina_id)` | a auditoria do gasto sobrevive e mantém o dono |
