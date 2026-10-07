@@ -4,6 +4,10 @@ services:
     # A extensão ainda precisa ser habilitada por banco (CREATE EXTENSION),
     # o que a migration inicial faz.
     image: pgvector/pgvector:pg16
+    # O Docker dá só 64 MB de /dev/shm. O Postgres usa memória compartilhada para
+    # operações paralelas (ex.: CREATE INDEX hnsw com vários workers) e falha com
+    # "could not resize shared memory segment" sem isto.
+    shm_size: 1gb
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -43,6 +47,8 @@ services:
       # PDFs enviados. O banco guarda só metadados + caminho (ver docs/busca-semantica.md)
       - uploads:/data/uploads
       - modelos:/modelos
+      # docs/ montada para scripts/experimento_hnsw.py gravar os resultados no repositório
+      - ./docs:/docs
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:
