@@ -19,6 +19,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Column,
     Computed,
     DateTime,
     FetchedValue,
@@ -30,12 +31,13 @@ from sqlalchemy import (
     MetaData,
     Numeric,
     SmallInteger,
+    Table,
     Text,
     UniqueConstraint,
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Dimensão dos embeddings do intfloat/multilingual-e5-small (fase 2; a fase 1
@@ -137,6 +139,8 @@ class Disciplina(Base):
         # Como usuario_id é a 1ª coluna, este índice também atende a FK
         # e a consulta "disciplinas do usuário X".
         Index("uq_disciplinas_usuario_nome", usuario_id, func.lower(nome), unique=True),
+        # Redundante com a PK; alvo da FK composta de geracoes (fase 3).
+        UniqueConstraint("id", "usuario_id"),
     )
 
 
@@ -242,6 +246,79 @@ class Trecho(Base):
     )
 
 
+# Tabelas associativas N:N (fase 3). Sem colunas próprias além das duas FKs,
+# então são Table "puras" do SQLAlchemy, usadas como `secondary` nos relacionamentos.
+# PK composta = o par não se repete; índice em trecho_id = "cards deste trecho" + FK.
+flashcard_trechos = Table(
+    "flashcard_trechos",
+    Base.metadata,
+    Column("flashcard_id", ForeignKey("flashcards.id", ondelete="CASCADE"), primary_key=True),
+    Column("trecho_id", ForeignKey("trechos.id", ondelete="CASCADE"), primary_key=True),
+    Index("ix_flashcard_trechos_trecho_id", "trecho_id"),
+)
+
+questao_trechos = Table(
+    "questao_trechos",
+    Base.metadata,
+    Column("questao_id", ForeignKey("questoes.id", ondelete="CASCADE"), primary_key=True),
+    Column("trecho_id", ForeignKey("trechos.id", ondelete="CASCADE"), primary_key=True),
+    Index("ix_questao_trechos_trecho_id", "trecho_id"),
+)
+
+
+class Geracao(Base):
+    """Auditoria: uma linha por chamada (com ou sem sucesso) ao LLM."""
+
+    __tablename__ = "geracoes"
+
+    id: Mapped[int] = pk()
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    # Nula quando a disciplina é apagada: a auditoria do gasto sobrevive.
+    disciplina_id: Mapped[int | None] = mapped_column(BigInteger)
+    tipo: Mapped[str] = mapped_column(Text, nullable=False)
+    modelo: Mapped[str] = mapped_column(Text, nullable=False)
+    tokens_entrada: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tokens_saida: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Calculado e gravado no momento da chamada (preço daquele dia), como o preço
+    # gravado no item de um pedido. NULL = modelo sem preço conhecido.
+    custo_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    duracao_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    chamadas: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="1")
+    erro_mensagem: Mapped[str | None] = mapped_column(Text)
+    criado_em: Mapped[datetime] = criado_em()
+
+    __table_args__ = (
+        # FK composta: impede registrar geração na disciplina de outro usuário.
+        # SET NULL (disciplina_id), do Postgres 15+: anula só essa coluna e a
+        # linha continua sabendo de quem é.
+        ForeignKeyConstraint(
+            ["disciplina_id", "usuario_id"],
+            ["disciplinas.id", "disciplinas.usuario_id"],
+            ondelete="SET NULL (disciplina_id)",
+        ),
+        CheckConstraint("tipo IN ('pergunta', 'flashcards', 'questoes')", name="tipo_valido"),
+        CheckConstraint(
+            "status IN ('sucesso', 'erro_validacao', 'erro_api')", name="status_valido"
+        ),
+        CheckConstraint(
+            "tokens_entrada >= 0 AND tokens_saida >= 0", name="tokens_nao_negativos"
+        ),
+        CheckConstraint("custo_usd >= 0", name="custo_nao_negativo"),
+        CheckConstraint("duracao_ms >= 0", name="duracao_nao_negativa"),
+        CheckConstraint("chamadas BETWEEN 1 AND 2", name="chamadas_1_ou_2"),
+        CheckConstraint("(status = 'sucesso') = (erro_mensagem IS NULL)", name="erro_conforme_status"),
+        Index("ix_geracoes_usuario_criado_em", "usuario_id", "criado_em"),
+        Index(
+            "ix_geracoes_disciplina_id",
+            "disciplina_id",
+            postgresql_where=text("disciplina_id IS NOT NULL"),
+        ),
+    )
+
+
 class Flashcard(Base):
     __tablename__ = "flashcards"
 
@@ -249,12 +326,15 @@ class Flashcard(Base):
     disciplina_id: Mapped[int] = mapped_column(
         ForeignKey("disciplinas.id", ondelete="CASCADE"), nullable=False
     )
-    # SET NULL: apagar o material de origem não apaga o flashcard já estudado.
-    trecho_id: Mapped[int | None] = mapped_column(ForeignKey("trechos.id", ondelete="SET NULL"))
     frente: Mapped[str] = mapped_column(Text, nullable=False)
     verso: Mapped[str] = mapped_column(Text, nullable=False)
     topico: Mapped[str | None] = mapped_column(Text)
     origem: Mapped[str] = mapped_column(Text, nullable=False, server_default="manual")
+    # Embedding da frente, para deduplicação (sem índice: busca exata por disciplina).
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    geracao_id: Mapped[int | None] = mapped_column(
+        ForeignKey("geracoes.id", ondelete="SET NULL")
+    )
 
     # Estado atual do SM-2 — cópia do resultado da última revisão (desnormalização
     # consciente para a consulta "o que revisar hoje" não precisar varrer revisoes).
@@ -270,7 +350,8 @@ class Flashcard(Base):
     atualizado_em: Mapped[datetime] = atualizado_em()
 
     disciplina: Mapped[Disciplina] = relationship(back_populates="flashcards")
-    trecho: Mapped[Trecho | None] = relationship()
+    # N:N pelos trechos de origem. passive_deletes: o banco apaga as associações.
+    trechos: Mapped[list[Trecho]] = relationship(secondary=flashcard_trechos, passive_deletes=True)
     revisoes: Mapped[list["Revisao"]] = relationship(
         back_populates="flashcard", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -283,15 +364,10 @@ class Flashcard(Base):
         CheckConstraint("intervalo_dias >= 0", name="intervalo_nao_negativo"),
         CheckConstraint("repeticoes >= 0", name="repeticoes_nao_negativas"),
         # Composto: filtra por disciplina e já entrega ordenado por data.
-        # Atende "cards da disciplina X com proxima_revisao <= agora".
+        # Atende "cards da disciplina X com proxima_revisao <= agora" e a
+        # deduplicação (cards da disciplina X).
         Index("ix_flashcards_disciplina_proxima_revisao", disciplina_id, proxima_revisao),
-        # Parcial: só indexa linhas com trecho. Necessário para o SET NULL ao
-        # apagar um trecho não varrer a tabela inteira.
-        Index(
-            "ix_flashcards_trecho_id",
-            trecho_id,
-            postgresql_where=trecho_id.isnot(None),
-        ),
+        Index("ix_flashcards_geracao_id", geracao_id, postgresql_where=geracao_id.isnot(None)),
     )
 
 
@@ -332,22 +408,29 @@ class Questao(Base):
     disciplina_id: Mapped[int] = mapped_column(
         ForeignKey("disciplinas.id", ondelete="CASCADE"), nullable=False
     )
-    trecho_id: Mapped[int | None] = mapped_column(ForeignKey("trechos.id", ondelete="SET NULL"))
     enunciado: Mapped[str] = mapped_column(Text, nullable=False)
     tipo: Mapped[str] = mapped_column(Text, nullable=False)
-    # Lista de alternativas, ex.: ["A) ...", "B) ..."]. jsonb em vez de uma tabela
-    # própria: alternativas só existem dentro da questão e são lidas sempre juntas.
-    alternativas: Mapped[list | None] = mapped_column(JSONB)
-    resposta_correta: Mapped[str] = mapped_column(Text, nullable=False)
+    # Gabarito de V/F e dissertativa. Em múltipla escolha o gabarito mora em
+    # alternativas.correta (uma única fonte da verdade) e esta coluna fica NULL.
+    resposta_correta: Mapped[str | None] = mapped_column(Text)
     explicacao: Mapped[str | None] = mapped_column(Text)
     dificuldade: Mapped[int | None] = mapped_column(SmallInteger)
     topico: Mapped[str | None] = mapped_column(Text)
     origem: Mapped[str] = mapped_column(Text, nullable=False, server_default="manual")
+    geracao_id: Mapped[int | None] = mapped_column(
+        ForeignKey("geracoes.id", ondelete="SET NULL")
+    )
     criado_em: Mapped[datetime] = criado_em()
     atualizado_em: Mapped[datetime] = atualizado_em()
 
     disciplina: Mapped[Disciplina] = relationship(back_populates="questoes")
-    trecho: Mapped[Trecho | None] = relationship()
+    alternativas: Mapped[list["Alternativa"]] = relationship(
+        back_populates="questao",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Alternativa.letra",
+    )
+    trechos: Mapped[list[Trecho]] = relationship(secondary=questao_trechos, passive_deletes=True)
     tentativas: Mapped[list["Tentativa"]] = relationship(
         back_populates="questao", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -359,23 +442,40 @@ class Questao(Base):
         ),
         CheckConstraint("origem IN ('manual', 'ia')", name="origem_valida"),
         CheckConstraint("dificuldade BETWEEN 1 AND 5", name="dificuldade_1_a_5"),
-        # Múltipla escolha exige um array com 2+ alternativas; os outros tipos não
-        # têm alternativas. CASE aninhado porque o SQL não garante a ordem de
-        # avaliação do AND, e jsonb_array_length dá erro se o valor não for array.
         CheckConstraint(
-            """CASE WHEN tipo = 'multipla_escolha' THEN
-                   CASE WHEN jsonb_typeof(alternativas) = 'array'
-                        THEN jsonb_array_length(alternativas) >= 2
-                        ELSE false END
-               ELSE alternativas IS NULL END""",
-            name="alternativas_conforme_tipo",
+            "(tipo = 'multipla_escolha') = (resposta_correta IS NULL)",
+            name="gabarito_conforme_tipo",
         ),
+        # "Pelo menos 2 alternativas e exatamente 1 correta" envolve várias linhas e
+        # não cabe em CHECK: é o constraint trigger adiado ck_questoes_alternativas_validas,
+        # criado na migration "alternativas_em_tabela" (o ORM não representa triggers).
         Index("ix_questoes_disciplina_id", disciplina_id),
-        Index(
-            "ix_questoes_trecho_id",
-            trecho_id,
-            postgresql_where=trecho_id.isnot(None),
-        ),
+        Index("ix_questoes_geracao_id", geracao_id, postgresql_where=geracao_id.isnot(None)),
+    )
+
+
+class Alternativa(Base):
+    __tablename__ = "alternativas"
+
+    id: Mapped[int] = pk()
+    questao_id: Mapped[int] = mapped_column(
+        ForeignKey("questoes.id", ondelete="CASCADE"), nullable=False
+    )
+    letra: Mapped[str] = mapped_column(Text, nullable=False)
+    texto: Mapped[str] = mapped_column(Text, nullable=False)
+    correta: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+
+    questao: Mapped[Questao] = relationship(back_populates="alternativas")
+
+    __table_args__ = (
+        CheckConstraint("letra ~ '^[A-E]$'", name="letra_valida"),
+        CheckConstraint("length(trim(texto)) > 0", name="texto_nao_vazio"),
+        UniqueConstraint("questao_id", "letra"),
+        # Redundante com a PK, mas é o alvo exigido pela FK composta de tentativas.
+        UniqueConstraint("questao_id", "id"),
+        # Índice único PARCIAL: só as linhas com correta = true entram nele, então
+        # cada questão pode ter no máximo uma correta.
+        Index("uq_alternativas_uma_correta", questao_id, unique=True, postgresql_where=correta),
     )
 
 
@@ -389,7 +489,11 @@ class Tentativa(Base):
     questao_id: Mapped[int] = mapped_column(
         ForeignKey("questoes.id", ondelete="CASCADE"), nullable=False
     )
-    resposta_dada: Mapped[str] = mapped_column(Text, nullable=False)
+    # Múltipla escolha: a alternativa escolhida. Outros tipos: resposta_dada.
+    alternativa_id: Mapped[int | None] = mapped_column(BigInteger)
+    resposta_dada: Mapped[str | None] = mapped_column(Text)
+    # Gravado (não derivado de alternativas.correta) de propósito: é o resultado
+    # NAQUELE momento; se o gabarito for corrigido depois, o histórico não muda.
     correta: Mapped[bool] = mapped_column(Boolean, nullable=False)
     tempo_ms: Mapped[int | None] = mapped_column(Integer)
     respondida_em: Mapped[datetime] = mapped_column(
@@ -397,8 +501,17 @@ class Tentativa(Base):
     )
 
     questao: Mapped[Questao] = relationship(back_populates="tentativas")
+    alternativa: Mapped["Alternativa | None"] = relationship(viewonly=True)
 
     __table_args__ = (
         CheckConstraint("tempo_ms >= 0", name="tempo_nao_negativo"),
+        CheckConstraint(
+            "alternativa_id IS NOT NULL OR resposta_dada IS NOT NULL", name="tem_resposta"
+        ),
+        # FK composta: a alternativa escolhida tem de ser DESTA questão.
+        # Sem ondelete = NO ACTION (ver migration "alternativas_em_tabela").
+        ForeignKeyConstraint(
+            ["questao_id", "alternativa_id"], ["alternativas.questao_id", "alternativas.id"]
+        ),
         Index("ix_tentativas_questao_respondida_em", questao_id, respondida_em),
     )

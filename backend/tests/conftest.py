@@ -76,6 +76,12 @@ def session(engine):
         # volta só até o savepoint. No fim, a transação externa é desfeita.
         sessao = Session(bind=conn, join_transaction_mode="create_savepoint")
         yield sessao
+        # Como o teste nunca dá COMMIT, as constraints adiadas (ex.: "questão de
+        # múltipla escolha precisa de 2+ alternativas e 1 correta") nunca seriam
+        # verificadas. Forçamos a verificação aqui: se a aplicação deixou dados que
+        # o COMMIT recusaria, o teste falha.
+        if transacao.is_active and not sessao.in_nested_transaction():
+            sessao.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         sessao.close()
         transacao.rollback()
 
