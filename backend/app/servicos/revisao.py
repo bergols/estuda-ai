@@ -34,31 +34,51 @@ SQL_FIM_DE_HOJE = """
 """
 
 # Ordem por atraso: quem venceu há mais tempo primeiro (proxima_revisao ASC).
-# Com o filtro de disciplina, o índice (disciplina_id, proxima_revisao) entrega
-# as linhas já filtradas E em ordem: o LIMIT para cedo, sem ordenar nada.
-# Sem o filtro, o mesmo índice é lido uma vez por disciplina do usuário e os
-# resultados são ordenados (poucas centenas de linhas). Ver
-# docs/experimentos/fila-do-dia.md.
-_SQL_FILA = """
-    SELECT r.flashcard_id, f.frente, f.verso, f.topico,
-           r.disciplina_id, d.nome AS disciplina_nome,
-           r.proxima_revisao, r.repeticoes, r.intervalo_dias, r.facilidade, r.versao,
-           round(greatest(extract(epoch FROM CAST(:agora AS timestamptz) - r.proxima_revisao), 0)
-                 / 86400, 2) AS atraso_dias
+_COLUNAS = """
+    r.flashcard_id, f.frente, f.verso, f.topico,
+    r.disciplina_id, d.nome AS disciplina_nome,
+    r.proxima_revisao, r.repeticoes, r.intervalo_dias, r.facilidade, r.versao,
+    round(greatest(extract(epoch FROM CAST(:agora AS timestamptz) - r.proxima_revisao), 0)
+          / 86400, 2) AS atraso_dias
+"""
+
+# Uma disciplina: o índice (disciplina_id, proxima_revisao) entrega as linhas já
+# filtradas E em ordem; o LIMIT para depois de :limite entradas do índice.
+SQL_FILA_DISCIPLINA = f"""
+    SELECT {_COLUNAS}
     FROM revisoes AS r
     JOIN disciplinas AS d ON d.id = r.disciplina_id
     JOIN flashcards AS f ON f.id = r.flashcard_id
-    WHERE d.usuario_id = :usuario_id
-      {filtro_disciplina}
+    WHERE r.disciplina_id = :disciplina_id
+      AND d.usuario_id = :usuario_id
       AND r.proxima_revisao < :fim_de_hoje
     ORDER BY r.proxima_revisao, r.flashcard_id
     LIMIT :limite
 """
-# Duas versões em vez de "AND (:disciplina_id IS NULL OR r.disciplina_id = :disciplina_id)":
+
+# Todas as disciplinas do usuário: o mesmo índice NÃO entrega em ordem de data as
+# linhas de várias disciplinas juntas (ele ordena por disciplina primeiro). Um
+# JOIN simples acabaria lendo todos os vencidos para depois ordenar. Com LATERAL,
+# para CADA disciplina do usuário uma subconsulta pega os :limite mais atrasados
+# pelo índice (top-N por grupo); depois só essas linhas (n_disciplinas x :limite)
+# são ordenadas. Medido em docs/experimentos/fila-do-dia.md.
+SQL_FILA_TODAS = f"""
+    SELECT {_COLUNAS}
+    FROM disciplinas AS d
+    CROSS JOIN LATERAL (
+        SELECT * FROM revisoes AS r2
+        WHERE r2.disciplina_id = d.id AND r2.proxima_revisao < :fim_de_hoje
+        ORDER BY r2.proxima_revisao, r2.flashcard_id
+        LIMIT :limite
+    ) AS r
+    JOIN flashcards AS f ON f.id = r.flashcard_id
+    WHERE d.usuario_id = :usuario_id
+    ORDER BY r.proxima_revisao, r.flashcard_id
+    LIMIT :limite
+"""
+# Duas consultas em vez de "AND (:disciplina_id IS NULL OR r.disciplina_id = :disciplina_id)":
 # esse "OR com parâmetro opcional" atrapalha o planejador (num plano genérico ele
-# não sabe qual lado do OR vale e tende a não usar o índice de disciplina).
-SQL_FILA_TODAS = _SQL_FILA.format(filtro_disciplina="")
-SQL_FILA_DISCIPLINA = _SQL_FILA.format(filtro_disciplina="AND r.disciplina_id = :disciplina_id")
+# não sabe qual lado do OR vale) e as duas filas pedem formas diferentes de consulta.
 
 
 @dataclass
