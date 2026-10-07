@@ -22,6 +22,7 @@ from sqlalchemy import (
     DateTime,
     FetchedValue,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     Integer,
@@ -174,6 +175,9 @@ class Material(Base):
         # O mesmo arquivo não entra duas vezes na mesma disciplina.
         # Também serve de índice para a FK disciplina_id.
         UniqueConstraint("disciplina_id", "hash_sha256"),
+        # Redundante com a PK (id já é único), mas é o alvo exigido pela FK
+        # composta trechos(material_id, disciplina_id).
+        UniqueConstraint("id", "disciplina_id"),
     )
 
 
@@ -181,14 +185,15 @@ class Trecho(Base):
     __tablename__ = "trechos"
 
     id: Mapped[int] = pk()
-    material_id: Mapped[int] = mapped_column(
-        ForeignKey("materiais.id", ondelete="CASCADE"), nullable=False
-    )
+    material_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # Cópia de materiais.disciplina_id (desnormalização): filtro e índice vetorial
+    # na mesma tabela. A FK composta abaixo impede a cópia de divergir.
+    disciplina_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     ordem: Mapped[int] = mapped_column(Integer, nullable=False)
     conteudo: Mapped[str] = mapped_column(Text, nullable=False)
     pagina: Mapped[int | None] = mapped_column(Integer)
+    pagina_fim: Mapped[int | None] = mapped_column(Integer)
     num_tokens: Mapped[int | None] = mapped_column(Integer)
-    # Nulo até o embedding ser calculado (processo assíncrono na fase 2).
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
     criado_em: Mapped[datetime] = criado_em()
 
@@ -201,7 +206,15 @@ class Trecho(Base):
         # pagina/num_tokens podem ser nulos, mas se vierem precisam ser válidos.
         CheckConstraint("pagina >= 1", name="pagina_positiva"),
         CheckConstraint("num_tokens > 0", name="num_tokens_positivo"),
+        CheckConstraint("pagina_fim >= pagina", name="pagina_fim_valida"),
         UniqueConstraint("material_id", "ordem"),
+        ForeignKeyConstraint(
+            ["material_id", "disciplina_id"],
+            ["materiais.id", "materiais.disciplina_id"],
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        Index("ix_trechos_disciplina_id", "disciplina_id"),
         # HNSW: grafo em camadas para busca aproximada de vizinhos mais próximos.
         # vector_cosine_ops casa com o operador <=> (distância de cosseno).
         Index(
