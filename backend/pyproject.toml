@@ -27,7 +27,13 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra"
+# Testes com o modelo real de embeddings são lentos: rode com `pytest -m modelo`.
+addopts = "-ra -m 'not modelo'"
+markers = ["modelo: usa o modelo real de embeddings (baixa ~470 MB na 1a vez)"]
+filterwarnings = [
+    # Ruído do SWIG usado internamente pelo PyMuPDF
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+]
 
 [tool.uv]
 package = false
