@@ -41,6 +41,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 # o índice HNSW. Ver a migration "embedding_384_dimensoes".
 EMBEDDING_DIM = 384
 
+STATUS_MATERIAL = ("pendente", "processando", "concluido", "erro")
+
 # Nomes previsíveis para constraints. Sem isso o Postgres inventa nomes
 # (ex.: disciplinas_usuario_id_fkey) e o Alembic não consegue apagá-las depois
 # de forma portátil.
@@ -145,6 +147,11 @@ class Material(Base):
     nome_arquivo: Mapped[str | None] = mapped_column(Text)
     hash_sha256: Mapped[str] = mapped_column(Text, nullable=False)
     tamanho_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # Caminho do arquivo no volume de uploads. O PDF em si não vai para o banco.
+    caminho_arquivo: Mapped[str | None] = mapped_column(Text)
+    erro_mensagem: Mapped[str | None] = mapped_column(Text)
+    num_paginas: Mapped[int | None] = mapped_column(Integer)
+    processado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     criado_em: Mapped[datetime] = criado_em()
     atualizado_em: Mapped[datetime] = atualizado_em()
 
@@ -156,8 +163,12 @@ class Material(Base):
     __table_args__ = (
         CheckConstraint("tipo IN ('pdf', 'anotacao', 'texto')", name="tipo_valido"),
         CheckConstraint(
-            "status IN ('pendente', 'processando', 'processado', 'erro')", name="status_valido"
+            "status IN ('pendente', 'processando', 'concluido', 'erro')", name="status_valido"
         ),
+        CheckConstraint("num_paginas > 0", name="num_paginas_positivo"),
+        # "Se A então B" em SQL vira "NOT A OR B":
+        CheckConstraint("erro_mensagem IS NULL OR status = 'erro'", name="erro_so_com_status_erro"),
+        CheckConstraint("tipo <> 'pdf' OR caminho_arquivo IS NOT NULL", name="pdf_tem_arquivo"),
         CheckConstraint("hash_sha256 ~ '^[0-9a-f]{64}$'", name="hash_formato"),
         CheckConstraint("tamanho_bytes > 0", name="tamanho_positivo"),
         # O mesmo arquivo não entra duas vezes na mesma disciplina.
