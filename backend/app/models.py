@@ -95,6 +95,11 @@ class Usuario(Base):
     id: Mapped[int] = pk()
     nome: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str] = mapped_column(Text, nullable=False)
+    # "Hoje" da fila de revisões é calculado neste fuso. Validado por trigger
+    # (trg_usuarios_fuso_valido): CHECK não pode consultar pg_timezone_names.
+    fuso_horario: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="America/Sao_Paulo"
+    )
     criado_em: Mapped[datetime] = criado_em()
     atualizado_em: Mapped[datetime] = atualizado_em()
 
@@ -336,68 +341,125 @@ class Flashcard(Base):
         ForeignKey("geracoes.id", ondelete="SET NULL")
     )
 
-    # Estado atual do SM-2 — cópia do resultado da última revisão (desnormalização
-    # consciente para a consulta "o que revisar hoje" não precisar varrer revisoes).
-    facilidade: Mapped[Decimal] = mapped_column(
-        Numeric(4, 2), nullable=False, server_default=text("2.50")
-    )
-    intervalo_dias: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    repeticoes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    proxima_revisao: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
     criado_em: Mapped[datetime] = criado_em()
     atualizado_em: Mapped[datetime] = atualizado_em()
 
     disciplina: Mapped[Disciplina] = relationship(back_populates="flashcards")
     # N:N pelos trechos de origem. passive_deletes: o banco apaga as associações.
     trechos: Mapped[list[Trecho]] = relationship(secondary=flashcard_trechos, passive_deletes=True)
-    revisoes: Mapped[list["Revisao"]] = relationship(
-        back_populates="flashcard", cascade="all, delete-orphan", passive_deletes=True
-    )
+    # Estado do SM-2 (1:1). Criado pelo trigger trg_flashcards_criar_estado no INSERT
+    # do card, então o ORM só lê (viewonly).
+    estado: Mapped["Revisao"] = relationship(viewonly=True, uselist=False)
+    historico: Mapped[list["HistoricoRevisao"]] = relationship(viewonly=True)
 
     __table_args__ = (
         CheckConstraint("length(trim(frente)) > 0", name="frente_nao_vazia"),
         CheckConstraint("length(trim(verso)) > 0", name="verso_nao_vazio"),
         CheckConstraint("origem IN ('manual', 'ia')", name="origem_valida"),
-        CheckConstraint("facilidade >= 1.30", name="facilidade_minima"),
-        CheckConstraint("intervalo_dias >= 0", name="intervalo_nao_negativo"),
-        CheckConstraint("repeticoes >= 0", name="repeticoes_nao_negativas"),
-        # Composto: filtra por disciplina e já entrega ordenado por data.
-        # Atende "cards da disciplina X com proxima_revisao <= agora" e a
-        # deduplicação (cards da disciplina X).
-        Index("ix_flashcards_disciplina_proxima_revisao", disciplina_id, proxima_revisao),
+        # FK disciplina_id + "cards da disciplina X" (deduplicação da fase 3).
+        Index("ix_flashcards_disciplina_id", disciplina_id),
+        # Redundante com a PK; alvo da FK composta de revisoes (fase 4).
+        UniqueConstraint("id", "disciplina_id"),
         Index("ix_flashcards_geracao_id", geracao_id, postgresql_where=geracao_id.isnot(None)),
     )
 
 
 class Revisao(Base):
-    """Histórico imutável: uma linha por revisão feita (log do SM-2)."""
+    """ESTADO ATUAL do SM-2 de um card (1:1 com flashcards).
+
+    Tabela estreita de propósito: cada revisão faz UPDATE aqui, e no Postgres um
+    UPDATE grava uma versão nova da linha inteira (MVCC). Separado de flashcards
+    (texto + embedding de 1,5 KB), o UPDATE reescreve ~60 bytes, não ~2 KB.
+    """
 
     __tablename__ = "revisoes"
+
+    # 1:1: a PK é a própria FK para o card.
+    flashcard_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # Cópia de flashcards.disciplina_id (FK composta abaixo): a fila filtra sem JOIN.
+    disciplina_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    facilidade: Mapped[Decimal] = mapped_column(
+        Numeric(4, 2), nullable=False, server_default=text("2.50")
+    )
+    intervalo_dias: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    repeticoes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Card novo nasce "para revisar agora".
+    proxima_revisao: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    ultima_revisao_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Controle otimista de concorrência: o cliente manda a versão que viu; o UPDATE
+    # só acontece se ela ainda for a atual (WHERE versao = :v) e soma 1.
+    versao: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    atualizado_em: Mapped[datetime] = atualizado_em()
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["flashcard_id", "disciplina_id"],
+            ["flashcards.id", "flashcards.disciplina_id"],
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        CheckConstraint("facilidade >= 1.30", name="facilidade_minima"),
+        CheckConstraint("intervalo_dias >= 0", name="intervalo_nao_negativo"),
+        CheckConstraint("repeticoes >= 0", name="repeticoes_nao_negativas"),
+        CheckConstraint("versao >= 0", name="versao_nao_negativa"),
+        CheckConstraint(
+            "(versao = 0) = (ultima_revisao_em IS NULL)", name="versao_conforme_ultima_revisao"
+        ),
+        CheckConstraint(
+            "ultima_revisao_em IS NULL OR proxima_revisao >= ultima_revisao_em",
+            name="proxima_apos_ultima",
+        ),
+        # Fila do dia: "disciplina = X e proxima_revisao < fim de hoje", em ordem de
+        # atraso. Escolha comprovada em docs/experimentos/fila-do-dia.md.
+        Index("ix_revisoes_disciplina_proxima_revisao", disciplina_id, proxima_revisao),
+    )
+
+
+class HistoricoRevisao(Base):
+    """HISTÓRICO IMUTÁVEL: uma linha por revisão feita, com o estado antes e depois.
+
+    Só INSERT: o trigger trg_historico_revisoes_imutavel recusa UPDATE. É o
+    registro do que aconteceu (alimenta o dashboard da fase 5); o estado atual em
+    revisoes poderia ser reconstruído reaplicando este histórico.
+    """
+
+    __tablename__ = "historico_revisoes"
 
     id: Mapped[int] = pk()
     flashcard_id: Mapped[int] = mapped_column(
         ForeignKey("flashcards.id", ondelete="CASCADE"), nullable=False
     )
-    qualidade: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    facilidade: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
-    intervalo_dias: Mapped[int] = mapped_column(Integer, nullable=False)
-    repeticoes: Mapped[int] = mapped_column(Integer, nullable=False)
-    proxima_revisao: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    nota: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    facilidade_anterior: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+    facilidade_nova: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+    intervalo_anterior: Mapped[int] = mapped_column(Integer, nullable=False)
+    intervalo_novo: Mapped[int] = mapped_column(Integer, nullable=False)
+    repeticoes_anterior: Mapped[int] = mapped_column(Integer, nullable=False)
+    repeticoes_nova: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Quando o card vencia antes desta revisão (atraso = revisado_em - isto).
+    proxima_revisao_anterior: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    proxima_revisao_nova: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revisado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    flashcard: Mapped[Flashcard] = relationship(back_populates="revisoes")
-
     __table_args__ = (
-        CheckConstraint("qualidade BETWEEN 0 AND 5", name="qualidade_0_a_5"),
-        CheckConstraint("facilidade >= 1.30", name="facilidade_minima"),
-        CheckConstraint("intervalo_dias >= 0", name="intervalo_nao_negativo"),
-        CheckConstraint("repeticoes >= 0", name="repeticoes_nao_negativas"),
-        CheckConstraint("proxima_revisao >= revisado_em", name="proxima_apos_revisao"),
-        Index("ix_revisoes_flashcard_revisado_em", flashcard_id, revisado_em),
+        CheckConstraint("nota BETWEEN 0 AND 5", name="nota_0_a_5"),
+        CheckConstraint(
+            "facilidade_anterior >= 1.30 AND facilidade_nova >= 1.30", name="facilidades_minimas"
+        ),
+        CheckConstraint(
+            "intervalo_anterior >= 0 AND intervalo_novo >= 0", name="intervalos_nao_negativos"
+        ),
+        CheckConstraint(
+            "repeticoes_anterior >= 0 AND repeticoes_nova >= 0", name="repeticoes_nao_negativas"
+        ),
+        CheckConstraint("proxima_revisao_nova >= revisado_em", name="proxima_apos_revisao"),
+        Index("ix_historico_revisoes_flashcard_revisado_em", flashcard_id, revisado_em),
     )
 
 
