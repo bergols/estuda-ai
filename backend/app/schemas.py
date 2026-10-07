@@ -5,7 +5,7 @@ ser violadas (unicidade, FKs, CHECKs) continuam no Postgres: a API é a
 primeira linha de defesa, o banco é a última.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -228,3 +228,13 @@ class TentativaResultado(BaseModel):
     alternativa_correta: str
     explicacao: str | None
     tempo_ms: int | None
+
+
+class GastoMensal(BaseModel):
+    disciplina_id: int | None  # None: disciplina apagada (a auditoria sobrevive)
+    disciplina_nome: str | None
+    mes: date  # primeiro dia do mês, no fuso de São Paulo
+    geracoes: int
+    tokens_entrada: int
+    tokens_saida: int
+    custo_usd: Decimal
