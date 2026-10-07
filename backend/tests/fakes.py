@@ -47,3 +47,46 @@ class EmbedderFalso:
 
     def embed_consulta(self, texto: str) -> list[float]:
         return self._vetor(texto)
+
+    def embed_simetrico(self, textos: list[str]) -> list[list[float]]:
+        return [self._vetor(t) for t in textos]
+
+
+class AnthropicFalso:
+    """Dublê do cliente da Anthropic: devolve respostas roteirizadas, em ordem.
+
+    Cada item de `roteiro` é um dict/modelo (vira o JSON da resposta), uma string
+    (texto cru, para simular JSON inválido) ou uma exceção (levantada na chamada).
+    Guarda os parâmetros de cada chamada em `chamadas` para os testes inspecionarem.
+    """
+
+    def __init__(self, *roteiro, tokens_entrada: int = 1000, tokens_saida: int = 200):
+        self.roteiro = list(roteiro)
+        self.chamadas: list[dict] = []
+        self.tokens_entrada = tokens_entrada
+        self.tokens_saida = tokens_saida
+        self.messages = self  # o código chama cliente.messages.create(...)
+
+    def create(self, **kwargs):
+        import json
+        from types import SimpleNamespace
+
+        from pydantic import BaseModel
+
+        self.chamadas.append(kwargs)
+        if not self.roteiro:
+            raise AssertionError("o código chamou o LLM mais vezes que o roteiro previa")
+        item = self.roteiro.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        if isinstance(item, BaseModel):
+            texto = item.model_dump_json()
+        elif isinstance(item, (dict, list)):
+            texto = json.dumps(item, ensure_ascii=False)
+        else:
+            texto = item
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=texto)],
+            usage=SimpleNamespace(input_tokens=self.tokens_entrada, output_tokens=self.tokens_saida),
+            stop_reason="end_turn",
+        )

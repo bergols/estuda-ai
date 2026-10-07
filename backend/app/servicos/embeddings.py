@@ -21,6 +21,7 @@ class Embedder(Protocol):
     def tokenizar(self, texto: str) -> list[tuple[int, int]]: ...
     def embed_trechos(self, textos: list[str]) -> list[list[float]]: ...
     def embed_consulta(self, texto: str) -> list[float]: ...
+    def embed_simetrico(self, textos: list[str]) -> list[list[float]]: ...
 
 
 class EmbedderE5:
@@ -57,6 +58,14 @@ class EmbedderE5:
 
     def embed_consulta(self, texto: str) -> list[float]:
         return self.modelo.encode(f"query: {texto}", normalize_embeddings=True).tolist()
+
+    def embed_simetrico(self, textos: list[str]) -> list[list[float]]:
+        """Para comparar textos do mesmo tipo entre si (ex.: flashcard x flashcard).
+        O e5 recomenda o prefixo "query: " dos dois lados nesse caso."""
+        vetores = self.modelo.encode(
+            [f"query: {t}" for t in textos], normalize_embeddings=True, batch_size=16
+        )
+        return vetores.tolist()
 
 
 @lru_cache
