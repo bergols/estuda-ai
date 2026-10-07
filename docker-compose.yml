@@ -1,0 +1,39 @@
+services:
+  db:
+    # Postgres 16 com a extensão pgvector já compilada.
+    # A extensão ainda precisa ser habilitada por banco (CREATE EXTENSION),
+    # o que a migration inicial faz.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Volume nomeado: os dados sobrevivem a `docker compose down`
+      # (só somem com `docker compose down -v`).
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready responde só quando o servidor aceita conexões
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        # Espera o healthcheck passar, não só o container iniciar
+        condition: service_healthy
+    volumes:
+      # Código montado para desenvolvimento: editar no Mac reflete no container
+      - ./backend:/app
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  pgdata:
