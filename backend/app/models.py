@@ -19,6 +19,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     FetchedValue,
     ForeignKey,
@@ -34,13 +35,17 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Dimensão dos embeddings do intfloat/multilingual-e5-small (fase 2; a fase 1
 # usava 1024). Mudar exige migration + recalcular todos os embeddings + recriar
 # o índice HNSW. Ver a migration "embedding_384_dimensoes".
 EMBEDDING_DIM = 384
+
+# Configuração de text search criada na migration "busca_textual_em_trechos":
+# portuguese + unaccent (busca sem diferenciar acentos).
+CONFIG_TEXTO = "portugues_unaccent"
 
 STATUS_MATERIAL = ("pendente", "processando", "concluido", "erro")
 
@@ -195,6 +200,14 @@ class Trecho(Base):
     pagina_fim: Mapped[int | None] = mapped_column(Integer)
     num_tokens: Mapped[int | None] = mapped_column(Integer)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    # Coluna gerada pelo banco a cada INSERT/UPDATE de conteudo. deferred: não é
+    # carregada nos SELECTs do ORM (só serve para o índice GIN e o @@).
+    conteudo_tsv: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed(f"to_tsvector('{CONFIG_TEXTO}'::regconfig, conteudo)", persisted=True),
+        nullable=False,
+        deferred=True,
+    )
     criado_em: Mapped[datetime] = criado_em()
 
     material: Mapped[Material] = relationship(back_populates="trechos")
@@ -215,6 +228,8 @@ class Trecho(Base):
             onupdate="CASCADE",
         ),
         Index("ix_trechos_disciplina_id", "disciplina_id"),
+        # GIN: índice invertido (lexema -> linhas), atende o operador @@.
+        Index("ix_trechos_conteudo_tsv", "conteudo_tsv", postgresql_using="gin"),
         # HNSW: grafo em camadas para busca aproximada de vizinhos mais próximos.
         # vector_cosine_ops casa com o operador <=> (distância de cosseno).
         Index(
