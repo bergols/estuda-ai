@@ -30,10 +30,19 @@ services:
       db:
         # Espera o healthcheck passar, não só o container iniciar
         condition: service_healthy
+    environment:
+      # Cache do Hugging Face num volume: o modelo (~470 MB) baixa uma vez só
+      HF_HOME: /modelos
+      UPLOAD_DIR: /data/uploads
     volumes:
       # Código montado para desenvolvimento: editar no Mac reflete no container
       - ./backend:/app
+      # PDFs enviados. O banco guarda só metadados + caminho (ver docs/busca-semantica.md)
+      - uploads:/data/uploads
+      - modelos:/modelos
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:
   pgdata:
+  uploads:
+  modelos:

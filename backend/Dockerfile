@@ -14,7 +14,8 @@ WORKDIR /app
 # Copia só os manifestos primeiro: a camada de dependências fica em cache
 # e só é refeita quando pyproject.toml/uv.lock mudam.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project
+# --no-cache: o cache do uv (downloads) não fica gravado na camada da imagem
+RUN uv sync --frozen --no-install-project --no-cache
 
 COPY . .
 
