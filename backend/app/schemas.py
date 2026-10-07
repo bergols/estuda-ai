@@ -9,7 +9,17 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
+from typing import Literal
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 Nome = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 Descricao = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
@@ -127,3 +137,94 @@ class RespostaPergunta(BaseModel):
     encontrado: bool
     citacoes: list[Citacao]
     geracao: GeracaoResumo | None  # None quando nem foi preciso chamar o LLM
+
+
+class GerarEntrada(BaseModel):
+    """Gerar a partir de UM material inteiro OU de um tema (busca híbrida)."""
+
+    material_id: int | None = None
+    tema: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)] | None = None
+    quantidade: int = Field(default=8, ge=1, le=20)
+
+    @model_validator(mode="after")
+    def material_ou_tema(self):
+        if (self.material_id is None) == (self.tema is None):
+            raise ValueError("informe exatamente um: material_id ou tema")
+        return self
+
+
+class TrechoOrigem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    material_id: int
+    pagina: int | None
+
+
+class FlashcardLer(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    frente: str
+    verso: str
+    topico: str | None
+    origem: str
+    geracao_id: int | None
+    trechos: list[TrechoOrigem]
+    criado_em: datetime
+
+
+class FlashcardDescartado(BaseModel):
+    frente: str
+    verso: str
+    parecido_com_id: int
+    parecido_com_frente: str
+    similaridade: float
+
+
+class FlashcardsGeradosSaida(BaseModel):
+    criados: list[FlashcardLer]
+    descartados: list[FlashcardDescartado]
+    limiar_duplicata: float
+    geracao: GeracaoResumo
+
+
+class AlternativaLer(BaseModel):
+    """Sem o campo correta: listar questões não pode entregar o gabarito."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    letra: str
+    texto: str
+
+
+class QuestaoLer(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    enunciado: str
+    dificuldade: int | None
+    topico: str | None
+    alternativas: list[AlternativaLer]
+    trechos: list[TrechoOrigem]
+    geracao_id: int | None
+    criado_em: datetime
+
+
+class QuestoesGeradasSaida(BaseModel):
+    questoes: list[QuestaoLer]
+    geracao: GeracaoResumo
+
+
+class TentativaEntrada(BaseModel):
+    alternativa: Literal["A", "B", "C", "D", "E"]
+    tempo_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+
+
+class TentativaResultado(BaseModel):
+    tentativa_id: int
+    correta: bool
+    alternativa_escolhida: str
+    alternativa_correta: str
+    explicacao: str | None
+    tempo_ms: int | None
