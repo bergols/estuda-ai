@@ -9,8 +9,10 @@ no final, então os testes não enxergam os dados uns dos outros e o banco
 volta limpo, sem precisar de TRUNCATE.
 """
 
+from contextlib import contextmanager
 from pathlib import Path
 
+import pymupdf
 import pytest
 from alembic import command
 from alembic.config import Config
@@ -21,8 +23,11 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_session
+from app.deps import get_fabrica_sessao
 from app.main import app
 from app.models import Usuario
+from app.servicos.embeddings import get_embedder
+from tests.fakes import EmbedderFalso
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -76,11 +81,48 @@ def session(engine):
 
 
 @pytest.fixture
-def client(session):
+def embedder():
+    return EmbedderFalso()
+
+
+@pytest.fixture
+def pasta_uploads(tmp_path):
+    return tmp_path / "uploads"
+
+
+@pytest.fixture
+def fabrica(session):
+    """Fábrica de sessões para o processamento em background: entrega a sessão
+    do teste, então tudo continua dentro da transação que será desfeita."""
+
+    @contextmanager
+    def _fabrica():
+        yield session
+
+    return _fabrica
+
+
+@pytest.fixture
+def client(session, embedder, pasta_uploads, fabrica):
+    settings = get_settings().model_copy(update={"upload_dir": pasta_uploads, "max_upload_mb": 1})
     app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_embedder] = lambda: embedder
+    app.dependency_overrides[get_fabrica_sessao] = lambda: fabrica
+    # O TestClient só devolve a resposta depois de rodar as BackgroundTasks,
+    # então ao fim de um client.post(...) o processamento já terminou.
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+def criar_pdf(paginas: list[str]) -> bytes:
+    """PDF com uma página por texto (insert_textbox quebra as linhas)."""
+    doc = pymupdf.open()
+    for texto in paginas:
+        pagina = doc.new_page()
+        pagina.insert_textbox(pymupdf.Rect(50, 50, 550, 800), texto, fontsize=9)
+    return doc.tobytes()
 
 
 def _criar_usuario(session: Session, nome: str, email: str) -> Usuario:
@@ -103,3 +145,8 @@ def outro_usuario(session):
 @pytest.fixture
 def headers(usuario):
     return {"X-Usuario-Id": str(usuario.id)}
+
+
+@pytest.fixture
+def disciplina_id(client, headers):
+    return client.post("/disciplinas", json={"nome": "Banco de Dados"}, headers=headers).json()["id"]

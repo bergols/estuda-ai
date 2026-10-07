@@ -34,7 +34,7 @@ class EmbedderE5:
         from sentence_transformers import SentenceTransformer
 
         modelo = SentenceTransformer(self.nome_modelo, device="cpu")
-        dimensao = modelo.get_sentence_embedding_dimension()
+        dimensao = modelo.get_embedding_dimension()
         if dimensao != EMBEDDING_DIM:
             # Falhar cedo: o banco recusaria cada INSERT com "expected 384 dimensions".
             raise RuntimeError(

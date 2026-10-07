@@ -34,6 +34,9 @@ services:
       # Cache do Hugging Face num volume: o modelo (~470 MB) baixa uma vez só
       HF_HOME: /modelos
       UPLOAD_DIR: /data/uploads
+      # No Colima/macOS os eventos de arquivo não atravessam o virtiofs: sem polling,
+      # o --reload do uvicorn não percebe as edições.
+      WATCHFILES_FORCE_POLLING: "true"
     volumes:
       # Código montado para desenvolvimento: editar no Mac reflete no container
       - ./backend:/app

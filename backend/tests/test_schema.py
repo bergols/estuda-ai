@@ -27,10 +27,16 @@ def trecho(session, disciplina):
         tipo="pdf",
         hash_sha256="a" * 64,
         tamanho_bytes=1024,
+        caminho_arquivo="apostila.pdf",
     )
     session.add(material)
     session.flush()
-    t = Trecho(material_id=material.id, ordem=0, conteudo="Índices B-tree...")
+    t = Trecho(
+        material_id=material.id,
+        disciplina_id=disciplina.id,
+        ordem=0,
+        conteudo="Índices B-tree...",
+    )
     session.add(t)
     session.flush()
     return t
@@ -62,8 +68,8 @@ def test_facilidade_do_sm2_nao_fica_abaixo_de_1_3(session, disciplina):
     _deve_violar(session, card, "ck_flashcards_facilidade_minima")
 
 
-def test_embedding_precisa_ter_1024_dimensoes(session, trecho):
-    with pytest.raises(DataError, match="expected 1024 dimensions"):
+def test_embedding_precisa_ter_384_dimensoes(session, trecho):
+    with pytest.raises(DataError, match="expected 384 dimensions"):
         with session.begin_nested():
             trecho.embedding = [0.1, 0.2, 0.3]
             session.flush()
@@ -88,3 +94,52 @@ def test_apagar_disciplina_apaga_conteudo_em_cascata(session, disciplina, trecho
 
     for tabela in ("materiais", "trechos", "flashcards"):
         assert session.scalar(text(f"SELECT count(*) FROM {tabela}")) == 0
+
+
+def test_pdf_sem_caminho_de_arquivo_e_recusado(session, disciplina):
+    material = Material(
+        disciplina_id=disciplina.id, titulo="x", tipo="pdf", hash_sha256="c" * 64, tamanho_bytes=1
+    )
+    _deve_violar(session, material, "ck_materiais_pdf_tem_arquivo")
+
+
+def test_mensagem_de_erro_so_com_status_erro(session, disciplina):
+    material = Material(
+        disciplina_id=disciplina.id,
+        titulo="x",
+        tipo="texto",
+        hash_sha256="d" * 64,
+        tamanho_bytes=1,
+        status="concluido",
+        erro_mensagem="isso não deveria existir",
+    )
+    _deve_violar(session, material, "ck_materiais_erro_so_com_status_erro")
+
+
+def test_fk_composta_impede_trecho_com_disciplina_diferente_da_do_material(
+    session, usuario, trecho
+):
+    outra = Disciplina(usuario_id=usuario.id, nome="Outra")
+    session.add(outra)
+    session.flush()
+
+    copia_errada = Trecho(
+        material_id=trecho.material_id, disciplina_id=outra.id, ordem=1, conteudo="x"
+    )
+    _deve_violar(session, copia_errada, "fk_trechos_material_id_materiais")
+
+
+def test_mover_material_de_disciplina_atualiza_os_trechos(session, usuario, trecho):
+    outra = Disciplina(usuario_id=usuario.id, nome="Outra")
+    session.add(outra)
+    session.flush()
+
+    session.execute(
+        text("UPDATE materiais SET disciplina_id = :d WHERE id = :m"),
+        {"d": outra.id, "m": trecho.material_id},
+    )
+
+    disciplina_do_trecho = session.scalar(
+        text("SELECT disciplina_id FROM trechos WHERE id = :id"), {"id": trecho.id}
+    )
+    assert disciplina_do_trecho == outra.id  # ON UPDATE CASCADE da FK composta

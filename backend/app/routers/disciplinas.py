@@ -6,24 +6,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import constraint_violada
-from app.deps import SessionDep, UsuarioAtual
-from app.models import Disciplina, Usuario
+from app.deps import DisciplinaDoUsuario, SessionDep, UsuarioAtual
+from app.models import Disciplina
 from app.schemas import DisciplinaAtualizar, DisciplinaCriar, DisciplinaLer
 
 router = APIRouter(prefix="/disciplinas", tags=["disciplinas"])
-
-
-def _buscar(session: Session, usuario: Usuario, disciplina_id: int) -> Disciplina:
-    # O filtro por usuario_id faz parte da consulta: disciplina de outro usuário
-    # responde 404, como se não existisse (não revela que o id existe).
-    disciplina = session.scalar(
-        select(Disciplina).where(
-            Disciplina.id == disciplina_id, Disciplina.usuario_id == usuario.id
-        )
-    )
-    if disciplina is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "disciplina não encontrada")
-    return disciplina
 
 
 def _commit(session: Session) -> None:
@@ -69,15 +56,14 @@ def listar_disciplinas(
 
 
 @router.get("/{disciplina_id}", response_model=DisciplinaLer)
-def obter_disciplina(disciplina_id: int, session: SessionDep, usuario: UsuarioAtual):
-    return _buscar(session, usuario, disciplina_id)
+def obter_disciplina(disciplina: DisciplinaDoUsuario):
+    return disciplina
 
 
 @router.patch("/{disciplina_id}", response_model=DisciplinaLer)
 def atualizar_disciplina(
-    disciplina_id: int, dados: DisciplinaAtualizar, session: SessionDep, usuario: UsuarioAtual
+    disciplina: DisciplinaDoUsuario, dados: DisciplinaAtualizar, session: SessionDep
 ):
-    disciplina = _buscar(session, usuario, disciplina_id)
     for campo, valor in dados.model_dump(exclude_unset=True).items():
         setattr(disciplina, campo, valor)
     _commit(session)
@@ -85,10 +71,10 @@ def atualizar_disciplina(
 
 
 @router.delete("/{disciplina_id}", status_code=status.HTTP_204_NO_CONTENT)
-def apagar_disciplina(disciplina_id: int, session: SessionDep, usuario: UsuarioAtual):
+def apagar_disciplina(disciplina: DisciplinaDoUsuario, session: SessionDep):
     # Um único DELETE: o ON DELETE CASCADE do banco apaga materiais, trechos,
     # flashcards, questões etc. (passive_deletes=True evita o ORM carregá-los).
-    disciplina = _buscar(session, usuario, disciplina_id)
+    # Os PDFs no volume ficam órfãos; a limpeza de arquivos está no roadmap.
     session.delete(disciplina)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

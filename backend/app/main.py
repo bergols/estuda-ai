@@ -7,11 +7,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.routers import disciplinas, usuarios
+from app.routers import disciplinas, materiais, usuarios
 
 app = FastAPI(title="estuda-ai", version="0.1.0")
 app.include_router(usuarios.router)
 app.include_router(disciplinas.router)
+app.include_router(materiais.router)
 
 
 @app.get("/health")

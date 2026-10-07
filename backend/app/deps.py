@@ -1,12 +1,27 @@
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db import get_session
-from app.models import Usuario
+from app.config import Settings, get_settings
+from app.db import SessionLocal, get_session
+from app.models import Disciplina, Usuario
+from app.servicos.embeddings import Embedder, get_embedder
+from app.servicos.processamento import FabricaSessao
 
 SessionDep = Annotated[Session, Depends(get_session)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+EmbedderDep = Annotated[Embedder, Depends(get_embedder)]
+
+
+def get_fabrica_sessao() -> FabricaSessao:
+    """Tarefas em background não podem usar a sessão da requisição (ela é
+    fechada quando a resposta sai); recebem a fábrica e abrem as próprias."""
+    return SessionLocal
+
+
+FabricaSessaoDep = Annotated[FabricaSessao, Depends(get_fabrica_sessao)]
 
 
 def usuario_atual(
@@ -25,3 +40,21 @@ def usuario_atual(
 
 
 UsuarioAtual = Annotated[Usuario, Depends(usuario_atual)]
+
+
+def disciplina_do_usuario(
+    disciplina_id: int, session: SessionDep, usuario: UsuarioAtual
+) -> Disciplina:
+    # O filtro por usuario_id faz parte da consulta: disciplina de outro usuário
+    # responde 404, como se não existisse (não revela que o id existe).
+    disciplina = session.scalar(
+        select(Disciplina).where(
+            Disciplina.id == disciplina_id, Disciplina.usuario_id == usuario.id
+        )
+    )
+    if disciplina is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "disciplina não encontrada")
+    return disciplina
+
+
+DisciplinaDoUsuario = Annotated[Disciplina, Depends(disciplina_do_usuario)]

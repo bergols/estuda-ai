@@ -56,3 +56,35 @@ class DisciplinaLer(BaseModel):
     descricao: str | None
     criado_em: datetime
     atualizado_em: datetime
+
+
+class MaterialLer(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    disciplina_id: int
+    titulo: str
+    tipo: str
+    status: str
+    nome_arquivo: str | None
+    tamanho_bytes: int
+    num_paginas: int | None
+    erro_mensagem: str | None
+    criado_em: datetime
+    processado_em: datetime | None
+
+
+class ResultadoBusca(BaseModel):
+    trecho_id: int
+    material_id: int
+    material_titulo: str
+    conteudo: str
+    pagina: int | None
+    pagina_fim: int | None
+    # semantica: similaridade de cosseno (1 = mesmo sentido)
+    # textual:   ts_rank_cd (relevância textual, sem limite superior)
+    # hibrida:   soma RRF das duas posições
+    score: float
+    # Só no modo híbrido: posição do trecho em cada lista antes da fusão
+    posicao_semantica: int | None = None
+    posicao_textual: int | None = None
