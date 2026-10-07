@@ -1,8 +1,21 @@
 # Modelagem do banco — estuda-ai
 
-Este documento explica **por que** o schema é como é. O código-fonte da verdade é a
-migration em `backend/alembic/versions/` (o DDL de fato) e `backend/app/models.py`
+Este documento explica **por que** o schema é como é. O código-fonte da verdade são as
+migrations em `backend/alembic/versions/` (o DDL de fato) e `backend/app/models.py`
 (o espelho em SQLAlchemy). Se os dois divergirem, `alembic check` acusa.
+
+A busca (embeddings, HNSW, full-text, busca híbrida) tem documento próprio:
+[`busca-semantica.md`](busca-semantica.md).
+
+Histórico de migrations:
+
+| Migration | Fase | O que fez |
+|---|---|---|
+| `schema_inicial` | 1 | 8 tabelas, constraints, índices, trigger de `atualizado_em` |
+| `embedding_384_dimensoes` | 2 | `vector(1024)` → `vector(384)` (modelo e5-small) |
+| `materiais_status_e_arquivo` | 2 | status `processado` → `concluido`; caminho, erro, páginas |
+| `trechos_disciplina_id_e_pagina_fim` | 2 | `disciplina_id` desnormalizado + FK composta; `pagina_fim` |
+| `busca_textual_em_trechos` | 2 | `unaccent`, config `portugues_unaccent`, `conteudo_tsv` + GIN |
 
 > Dica de estudo: abra o `psql` e confira cada afirmação daqui.
 > `docker compose exec db psql -U estuda_ai -d estuda_ai` e depois `\d+ flashcards`.
@@ -15,7 +28,7 @@ migration em `backend/alembic/versions/` (o DDL de fato) e `backend/app/models.p
 erDiagram
     usuarios ||--o{ disciplinas : "possui (CASCADE)"
     disciplinas ||--o{ materiais : "contém (CASCADE)"
-    materiais ||--o{ trechos : "dividido em (CASCADE)"
+    materiais ||--o{ trechos : "dividido em (CASCADE, FK composta)"
     disciplinas ||--o{ flashcards : "tem (CASCADE)"
     disciplinas ||--o{ questoes : "tem (CASCADE)"
     trechos |o--o{ flashcards : "origina (SET NULL)"
@@ -43,21 +56,28 @@ erDiagram
         bigint disciplina_id FK
         text titulo
         text tipo "pdf | anotacao | texto"
-        text status "pendente | processando | processado | erro"
+        text status "pendente | processando | concluido | erro"
         text nome_arquivo
+        text caminho_arquivo "relativo ao volume; obrigatório se pdf"
         text hash_sha256 "único por disciplina"
         bigint tamanho_bytes
+        int num_paginas
+        text erro_mensagem "só com status erro"
+        timestamptz processado_em
         timestamptz criado_em
         timestamptz atualizado_em
     }
     trechos {
         bigint id PK
-        bigint material_id FK
+        bigint material_id FK "FK composta com disciplina_id"
+        bigint disciplina_id FK "cópia de materiais.disciplina_id"
         int ordem "única por material"
         text conteudo
-        int pagina
+        int pagina "onde o trecho começa"
+        int pagina_fim ">= pagina"
         int num_tokens
-        vector embedding "vector(1024), HNSW"
+        vector embedding "vector(384), HNSW"
+        tsvector conteudo_tsv "GERADA, GIN"
         timestamptz criado_em
     }
     flashcards {
@@ -205,13 +225,21 @@ Cada disciplina pertence a **um** usuário (1:N).
 
 Um arquivo ou anotação enviado para uma disciplina.
 
-- `status` modela uma pequena **máquina de estados** do processamento da fase 2:
-  `pendente → processando → processado | erro`.
+- `status` modela uma pequena **máquina de estados** do processamento:
+  `pendente → processando → concluido | erro` (e `erro → pendente` ao reprocessar).
+  Na fase 2 o valor `processado` virou `concluido`: com `text + CHECK` isso foi um
+  DROP CONSTRAINT + UPDATE + ADD CONSTRAINT (ver `busca-semantica.md`, seção 9).
+- CHECKs condicionais, a forma SQL de "se A então B" (`NOT A OR B`):
+  `erro_mensagem IS NULL OR status = 'erro'` e `tipo <> 'pdf' OR caminho_arquivo IS NOT NULL`.
+- `caminho_arquivo` é **relativo** à pasta de uploads: mudar o ponto de montagem do
+  volume não exige migrar dados.
 - `hash_sha256` + `UNIQUE (disciplina_id, hash_sha256)`: o mesmo PDF não é processado
   (nem pago em embeddings) duas vezes na mesma disciplina. O `CHECK` com regex
   (`~ '^[0-9a-f]{64}$'`) garante que é mesmo um SHA-256 em hexadecimal.
-- O arquivo em si **não** fica no banco (ficará em disco/objeto). Guardar binários grandes
+- O arquivo em si **não** fica no banco (fica num volume Docker). Guardar binários grandes
   no Postgres incha backups e o cache de páginas; o banco guarda os metadados.
+- `UNIQUE (id, disciplina_id)`: redundante com a PK (o `id` sozinho já é único), mas é o
+  alvo exigido pela FK composta de `trechos` (seção 4b).
 
 ### `trechos`
 
@@ -219,14 +247,18 @@ Pedaços (*chunks*) do texto de um material, cada um com seu embedding.
 
 - `UNIQUE (material_id, ordem)`: posição do trecho dentro do material. Permite
   reconstruir o texto e buscar "o trecho anterior e o próximo" para dar contexto ao RAG.
-- `embedding vector(1024)`: tipo da extensão **pgvector**. A dimensão é fixa: todos os
-  vetores da coluna precisam ter 1024 números. Escolhemos 1024 porque serve tanto para a
-  Voyage AI (`voyage-3.5`, API paga, recomendada pela Anthropic, que não tem API de
-  embeddings própria) quanto para o `bge-m3` (local, gratuito, multilíngue).
-  Trocar de dimensão = migration + recalcular todos os embeddings + recriar o índice.
-- `embedding` é **nullable** porque o trecho é inserido primeiro e o embedding é
-  calculado depois (de forma assíncrona). Linhas com `NULL` simplesmente não entram no
-  índice HNSW.
+- `embedding vector(384)`: tipo da extensão **pgvector**. A dimensão é fixa: todos os
+  vetores da coluna precisam ter 384 números, a saída do modelo local
+  `intfloat/multilingual-e5-small`. A fase 1 tinha criado `vector(1024)` (pensando em
+  Voyage AI ou bge-m3); a fase 2 trocou com uma migration nova, `USING NULL`, porque
+  embedding de um modelo não se converte para outro.
+- `embedding` é **nullable** no schema, mas na prática todo trecho nasce com embedding:
+  trechos e vetores são gravados juntos, na mesma transação. Linhas com `NULL` não
+  entrariam no índice HNSW.
+- `disciplina_id` é uma **cópia** de `materiais.disciplina_id` (seção 4b) e `pagina_fim`
+  registra onde termina um trecho que atravessa páginas.
+- `conteudo_tsv` é uma **coluna gerada** (`GENERATED ALWAYS AS (to_tsvector(...)) STORED`):
+  o banco a calcula a partir de `conteudo` e ninguém consegue gravá-la à mão.
 
 ### `flashcards`
 
@@ -308,6 +340,44 @@ ACID, atomicidade). Isso será implementado na fase 4.
 
 ---
 
+## 4b. A segunda desnormalização: `trechos.disciplina_id` e a FK composta
+
+`trechos.disciplina_id` é determinado por `material_id` (o material já sabe a sua
+disciplina): dependência transitiva, que fere a 3FN. Copiamos mesmo assim porque **toda
+busca filtra por disciplina**, e com a coluna na própria tabela:
+
+- o filtro fica junto do índice vetorial (sem JOIN antes de poder filtrar);
+- um B-tree em `disciplina_id` deixa o planejador escolher **busca exata** para
+  disciplinas pequenas. No experimento: 0,20 ms e recall 1,0, contra 3,3 ms e recall 0,88
+  do HNSW com filtro (`busca-semantica.md`, seção 5).
+
+O risco de qualquer cópia é **divergir** do original. Aqui o banco impede isso:
+
+```sql
+-- em vez de FOREIGN KEY (material_id) REFERENCES materiais (id):
+FOREIGN KEY (material_id, disciplina_id)
+    REFERENCES materiais (id, disciplina_id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+```
+
+- É impossível gravar um trecho dizendo "sou da disciplina 7" se o material dele é da 9:
+  o **par** precisa existir em `materiais` (`test_fk_composta_impede_trecho_com_...`).
+- Uma FK precisa apontar para colunas com `UNIQUE` ou `PRIMARY KEY`. `(id, disciplina_id)`
+  já é único na prática, porque `id` é PK, mas o Postgres exige a constraint declarada:
+  daí `uq_materiais_id_disciplina_id`. Ela custa um índice a mais em `materiais`, uma
+  tabela pequena.
+- `ON UPDATE CASCADE`: se um material mudar de disciplina, o Postgres atualiza a cópia
+  em todos os trechos dele (`test_mover_material_de_disciplina_atualiza_os_trechos`).
+
+Compare com a desnormalização do SM-2 (seção 4), em que a coerência depende do código
+gravar as duas coisas na mesma transação. Aqui é o próprio banco que garante.
+
+Como a coluna foi adicionada a uma tabela que poderia já ter linhas: `ADD COLUMN` nullable
+→ `UPDATE ... FROM materiais` → `SET NOT NULL`. Não dá para exigir `NOT NULL` de uma
+coluna nova antes de preenchê-la.
+
+---
+
 ## 5. Normalização
 
 Resumo das formas normais aplicadas aqui:
@@ -330,6 +400,7 @@ Exceções conscientes (e onde estão documentadas):
 | Onde | O quê | Por quê |
 |---|---|---|
 | `flashcards` | estado do SM-2 copiado de `revisoes` | desempenho da consulta do dia (seção 4) |
+| `trechos.disciplina_id` | cópia de `materiais.disciplina_id` | filtro da busca junto do índice; protegida por FK composta (seção 4b) |
 | `questoes.alternativas` | lista em `jsonb` | dado sempre lido junto, nunca filtrado |
 | `topico` (texto livre) | sem tabela própria | ainda não sabemos os tópicos; ver abaixo |
 
@@ -357,9 +428,12 @@ concreta em mente.
 | `pk_*` (todas) | B-tree, único | busca por id; automático |
 | `uq_usuarios_email_lower` | B-tree, único, expressão | login / cadastro por e-mail |
 | `uq_disciplinas_usuario_nome` | B-tree, único, composto | "disciplinas do usuário X" + FK `usuario_id` |
-| `uq_materiais_disciplina_id_hash_sha256` | B-tree, único, composto | dedupe de upload + FK `disciplina_id` |
-| `uq_trechos_material_id_ordem` | B-tree, único, composto | trechos de um material em ordem + FK |
+| `uq_materiais_disciplina_id_hash_sha256` | B-tree, único, composto | dedupe de upload + FK `disciplina_id` + listar materiais |
+| `uq_materiais_id_disciplina_id` | B-tree, único, composto | alvo da FK composta de `trechos` |
+| `uq_trechos_material_id_ordem` | B-tree, único, composto | trechos de um material em ordem + FK composta (prefixo `material_id`) |
+| `ix_trechos_disciplina_id` | B-tree | busca exata em disciplina pequena; filtro da busca textual |
 | `ix_trechos_embedding_hnsw` | **HNSW** (pgvector) | busca semântica por similaridade |
+| `ix_trechos_conteudo_tsv` | **GIN** | busca textual (`@@`) |
 | `ix_flashcards_disciplina_proxima_revisao` | B-tree, composto | "o que revisar hoje" + FK `disciplina_id` |
 | `ix_flashcards_trecho_id` | B-tree, **parcial** | FK `trecho_id` (o `SET NULL` ao apagar trecho) |
 | `ix_revisoes_flashcard_revisado_em` | B-tree, composto | histórico de um card + FK |
@@ -401,10 +475,16 @@ ANN (*approximate nearest neighbor*): troca um pouco de precisão (*recall*) por
 - **Por que não IVFFlat?** O outro índice do pgvector precisa ser criado *depois* de já
   existirem dados (ele agrupa os vetores em listas com k-means). O HNSW pode ser criado
   com a tabela vazia e se mantém bom conforme os dados chegam — ideal para nós.
-- **Ponto de atenção para a fase 2:** buscaremos "trechos parecidos **desta disciplina**".
-  Filtro + busca aproximada é delicado: o HNSW acha os N mais próximos no geral e o filtro
-  é aplicado depois, podendo sobrar menos de N. O pgvector 0.8+ tem
-  `hnsw.iterative_scan` para isso. Vamos medir com `EXPLAIN ANALYZE`.
+- **Filtro + busca aproximada** é delicado: o HNSW acha os `ef_search` mais próximos no
+  geral e o filtro é aplicado depois. Medido na fase 2: numa disciplina com 1% dos
+  trechos, sem iterative scan, voltaram 1,5 de 10 linhas. Detalhes e números em
+  `busca-semantica.md`, seções 4 e 5.
+
+### GIN (busca textual)
+
+Índice **invertido**: para cada lexema, a lista de linhas que o contêm (como o índice
+remissivo de um livro). Atende `tsvector @@ tsquery`. Detalhes em `busca-semantica.md`,
+seção 6.
 
 ---
 
@@ -414,10 +494,13 @@ ANN (*approximate nearest neighbor*): troca um pouco de precisão (*recall*) por
 |---|---|---|
 | usuário | `CASCADE` → disciplinas → materiais, trechos, flashcards, revisões, questões, tentativas | tudo pertence ao usuário |
 | disciplina | `CASCADE` → materiais, flashcards, questões (e descendentes) | conteúdo da disciplina |
-| material | `CASCADE` → trechos | trechos são pedaços do material |
+| material | `CASCADE` → trechos (pela FK composta) | trechos são pedaços do material |
 | trecho | `SET NULL` em `flashcards.trecho_id` e `questoes.trecho_id` | o card/questão sobrevive à fonte |
 | flashcard | `CASCADE` → revisões | histórico sem card não tem sentido |
 | questão | `CASCADE` → tentativas | idem |
+
+Atualizar `materiais.disciplina_id` propaga para `trechos.disciplina_id`
+(`ON UPDATE CASCADE` da FK composta).
 
 Opções que não usamos: `RESTRICT`/`NO ACTION` (impede apagar o pai enquanto houver
 filhos — útil para dados que nunca devem sumir em cascata, como pedidos de uma loja)
