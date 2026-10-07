@@ -24,6 +24,27 @@ SEPARADOR_PAGINAS = "\n\n"
 
 
 @dataclass(frozen=True)
+class _Palavra:
+    inicio: int  # caractere
+    fim: int
+    num_tokens: int
+
+
+def _agrupar_em_palavras(tokens: list[tuple[int, int]]) -> list[_Palavra]:
+    """O tokenizador do e5 quebra palavras em pedaços ("Índices" -> "▁Í" + "ndices").
+    Um pedaço que continua uma palavra começa exatamente onde o anterior termina
+    (sem espaço entre eles). Juntamos os pedaços para nunca cortar uma palavra."""
+    palavras: list[_Palavra] = []
+    for inicio, fim in tokens:
+        if palavras and inicio == palavras[-1].fim:
+            p = palavras[-1]
+            palavras[-1] = _Palavra(p.inicio, fim, p.num_tokens + 1)
+        else:
+            palavras.append(_Palavra(inicio, fim, 1))
+    return palavras
+
+
+@dataclass(frozen=True)
 class TrechoGerado:
     ordem: int
     conteudo: str
@@ -50,12 +71,19 @@ def dividir_em_trechos(
         posicao += len(texto) + len(SEPARADOR_PAGINAS)
     texto = SEPARADOR_PAGINAS.join(partes)
 
-    tokens = tokenizar(texto)
+    palavras = _agrupar_em_palavras(tokenizar(texto))
     trechos: list[TrechoGerado] = []
-    passo = tamanho - sobreposicao
-    for inicio in range(0, len(tokens), passo):
-        janela = tokens[inicio : inicio + tamanho]
-        primeiro_char, ultimo_char = janela[0][0], janela[-1][1]
+    i = 0
+    while i < len(palavras):
+        # Enche o trecho com palavras inteiras até o limite de tokens.
+        j, num_tokens = i, 0
+        while j < len(palavras) and num_tokens + palavras[j].num_tokens <= tamanho:
+            num_tokens += palavras[j].num_tokens
+            j += 1
+        if j == i:  # uma "palavra" maior que o trecho inteiro (ex.: URL enorme)
+            j, num_tokens = i + 1, palavras[i].num_tokens
+
+        primeiro_char, ultimo_char = palavras[i].inicio, palavras[j - 1].fim
         trechos.append(
             TrechoGerado(
                 ordem=len(trechos),
@@ -64,9 +92,16 @@ def dividir_em_trechos(
                 # que é exatamente o número (1-based) da página que o contém.
                 pagina=bisect_right(inicios_paginas, primeiro_char),
                 pagina_fim=bisect_right(inicios_paginas, ultimo_char - 1),
-                num_tokens=len(janela),
+                num_tokens=num_tokens,
             )
         )
-        if inicio + tamanho >= len(tokens):
-            break  # a janela já chegou ao fim; outra só repetiria a sobreposição
+        if j >= len(palavras):
+            break
+        # Sobreposição: o próximo trecho recomeça voltando palavras até somar
+        # ~`sobreposicao` tokens (sempre avançando pelo menos uma palavra).
+        k, repetidos = j, 0
+        while k > i + 1 and repetidos < sobreposicao:
+            k -= 1
+            repetidos += palavras[k].num_tokens
+        i = k
     return trechos

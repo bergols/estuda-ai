@@ -62,3 +62,23 @@ def test_pdf_sem_texto_gera_erro(tmp_path):
 
     with pytest.raises(ErroExtracao, match="texto extraível"):
         extrair_paginas(caminho)
+
+
+def tokenizar_em_pedacos(texto: str) -> list[tuple[int, int]]:
+    """Imita um tokenizador de subpalavras: quebra cada palavra em pedaços de 2 letras."""
+    tokens = []
+    for inicio, fim in tokenizar(texto):
+        tokens += [(i, min(i + 2, fim)) for i in range(inicio, fim, 2)]
+    return tokens
+
+
+def test_trechos_nao_comecam_nem_terminam_no_meio_de_palavra():
+    texto = "alfa bravo charlie delta echo foxtrot golf hotel india juliet kilo lima"
+
+    trechos = dividir_em_trechos([texto], tokenizar_em_pedacos, tamanho=7, sobreposicao=2)
+
+    palavras_validas = set(texto.split())
+    for t in trechos:
+        assert set(t.conteudo.split()) <= palavras_validas, t.conteudo
+    # e nenhuma palavra se perde: todas aparecem em algum trecho
+    assert set().union(*(t.conteudo.split() for t in trechos)) == palavras_validas
