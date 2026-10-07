@@ -1,0 +1,34 @@
+# Segredos — nunca commitar
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Node / Next.js (fase futura)
+node_modules/
+.next/
+out/
+
+# Uploads de materiais (fase 2) — ficam fora do Git
+uploads/
+
+# Sistema / editores
+.DS_Store
+.idea/
+.vscode/
+*.swp
