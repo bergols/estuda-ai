@@ -15,6 +15,7 @@ from app.routers import (
     materiais,
     perguntar,
     questoes,
+    revisoes,
     usuarios,
 )
 
@@ -27,6 +28,7 @@ app.include_router(perguntar.router)
 app.include_router(flashcards.router)
 app.include_router(questoes.router)
 app.include_router(gastos.router)
+app.include_router(revisoes.router)
 
 
 @app.get("/health")

@@ -28,6 +28,8 @@ Descricao = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2
 class UsuarioCriar(BaseModel):
     nome: Nome
     email: EmailStr
+    # Validado no banco (trigger trg_usuarios_fuso_valido): fuso desconhecido -> 422.
+    fuso_horario: str = Field(default="America/Sao_Paulo", max_length=64)
 
 
 class UsuarioLer(BaseModel):
@@ -36,6 +38,7 @@ class UsuarioLer(BaseModel):
     id: int
     nome: str
     email: str
+    fuso_horario: str
     criado_em: datetime
 
 
@@ -238,3 +241,48 @@ class GastoMensal(BaseModel):
     tokens_entrada: int
     tokens_saida: int
     custo_usd: Decimal
+
+
+# ------------------------------------------------------------------ fase 4
+
+
+class CardDaFila(BaseModel):
+    flashcard_id: int
+    frente: str
+    verso: str
+    topico: str | None
+    disciplina_id: int
+    disciplina_nome: str
+    proxima_revisao: datetime
+    atraso_dias: Decimal  # 0 se vence ainda hoje, mais tarde
+    repeticoes: int
+    intervalo_dias: int
+    facilidade: Decimal
+    versao: int  # devolva no POST /revisoes/{id} (controle otimista)
+
+
+class FilaDoDia(BaseModel):
+    fuso_horario: str
+    fim_de_hoje: datetime  # próxima meia-noite no fuso do usuário
+    cards: list[CardDaFila]
+
+
+class RevisaoEntrada(BaseModel):
+    nota: int = Field(ge=0, le=5)
+    versao: int = Field(ge=0, description="a versao do card que você recebeu na fila")
+
+
+class EstadoSM2Saida(BaseModel):
+    facilidade: Decimal
+    intervalo_dias: int
+    repeticoes: int
+
+
+class ResultadoRevisaoSaida(BaseModel):
+    flashcard_id: int
+    nota: int
+    anterior: EstadoSM2Saida
+    novo: EstadoSM2Saida
+    proxima_revisao: datetime
+    versao: int
+    historico_id: int
