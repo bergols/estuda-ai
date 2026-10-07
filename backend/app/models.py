@@ -36,9 +36,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-# Dimensão dos embeddings: 1024 serve para voyage-3.5 (API) e bge-m3 (local).
-# Mudar exige migration + recalcular todos os embeddings + recriar o índice HNSW.
-EMBEDDING_DIM = 1024
+# Dimensão dos embeddings do intfloat/multilingual-e5-small (fase 2; a fase 1
+# usava 1024). Mudar exige migration + recalcular todos os embeddings + recriar
+# o índice HNSW. Ver a migration "embedding_384_dimensoes".
+EMBEDDING_DIM = 384
 
 # Nomes previsíveis para constraints. Sem isso o Postgres inventa nomes
 # (ex.: disciplinas_usuario_id_fkey) e o Alembic não consegue apagá-las depois
