@@ -11,7 +11,8 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
   schema, `busca-semantica.md` para busca/índices/transações do pipeline,
   `geracao-llm.md` para LLM/RAG/auditoria, `repeticao-espacada.md` para SM-2/fila/
   concorrência/fuso, `analytics.md` para as consultas analíticas, `seguranca.md` para
-  auth/isolamento/injection/rate limit/privilégios/CI), diga o
+  auth/isolamento/injection/rate limit/privilégios/CI, `frontend.md` para BFF/cookies/
+  contrato tipado/TanStack Query/gráficos), diga o
   *porquê* (alternativas consideradas, custo/benefício), não só o quê. Didático,
   em português.
 - **Commits pequenos, Conventional Commits em português** (`feat:`, `fix:`, `docs:`,
@@ -26,10 +27,11 @@ Fases 1 (fundação + modelagem), 2 (upload de PDF, embeddings, busca semântica
 híbrida, experimento HNSW), 3 (RAG com a API da Anthropic: perguntar, flashcards,
 questões, tentativas, auditoria de custos), 4 (SM-2, fila do dia, concorrência, fuso) e 5
 (analytics com SQL avançado, views e materialized view) concluídas. Fase 6 em 3 sessões:
-(1) segurança + CI, **concluída**; (2) frontend Next.js + dashboard (Recharts) + job de
-build do frontend no CI; (3) deploy (apresentar 2-3 opções de hospedagem ao autor e só
-fazer depois que ele escolher), backup com `pg_dump`, diagrama Mermaid no README,
-exercícios da fase 6. Roadmap no `README.md`.
+(1) segurança + CI e (2) frontend Next.js (BFF com cookie httpOnly, todas as telas,
+painel com Recharts, job do frontend no CI) **concluídas**; (3) deploy (apresentar 2-3
+opções de hospedagem ao autor e só fazer depois que ele escolher; ver se a plataforma
+escreve `X-Forwarded-For` de forma confiável para o BFF), backup com `pg_dump`, diagrama
+Mermaid no README, exercícios da fase 6. Roadmap no `README.md`.
 Pendente da fase 3: o teste real com a API (falta `ANTHROPIC_API_KEY` no `.env`). Exercícios de SQL por fase em `docs/exercicios.md` (sem respostas; o autor
 preenche "Minha resposta:").
 
@@ -47,6 +49,11 @@ docker compose exec backend python -m scripts.experimento_hnsw   # regenera docs
 docker compose exec backend python -m scripts.criar_usuario --email x@y.com --nome "X"  # única forma de criar conta
 docker compose exec backend ruff check .                         # lint (o mesmo do CI)
 docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git --redact --gitleaks-ignore-path /repo/.gitleaksignore /repo  # segredos no histórico (sem pipe!)
+docker compose exec backend python -m scripts.seed_revisoes --senha-dev   # conta demo local p/ o frontend
+docker compose exec -T backend python -m scripts.exportar_openapi > frontend/openapi.json  # contrato
+npm --prefix frontend run dev        # http://localhost:3000 (frontend/.env.local: BACKEND_URL, BFF_SEGREDO)
+npm --prefix frontend run tipos      # tipos TS a partir do openapi.json
+npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build
 ```
 
 Seeds: `scripts/seed_experimento.py` (50 mil trechos sintéticos, fase 2) e
@@ -71,6 +78,12 @@ Armadilhas de ambiente já encontradas:
   `app.openapi()["paths"]` (meta-testes de `test_isolamento.py`).
 - gitleaks: allowlist global com `paths` pula o ARQUIVO inteiro, mesmo com
   `condition = "AND"`. Use só `regexes` com `regexTarget = "line"` ancorado.
+- Preview no app desktop: o `launch.json` lido é o da pasta da sessão
+  (`~/claude projetos/.claude/launch.json`, entrada `estuda-ai-frontend`), não o do repo.
+- Next 16: `LayoutProps`/`PageProps`/`RouteContext` são gerados em `.next/types`; por isso
+  `typecheck` = `next typegen && tsc`. Middleware agora se chama `proxy.ts`.
+- O SDK da Anthropic sem chave lança `TypeError` (não `AnthropicError`): `ClienteLLM.gerar`
+  confere a credencial antes.
 
 ## Convenções de banco (seguir nas próximas migrations)
 
@@ -146,6 +159,29 @@ Detalhes e o porquê em `docs/seguranca.md`.
 - CI (`.github/workflows/ci.yml`): ruff, migrations nos dois sentidos, `alembic check`, pytest
   (sem o grupo de dependências `modelo`) e gitleaks no histórico inteiro. Rode testes e build
   antes de cada push. Dependência pesada nova que só o modelo usa vai no grupo `modelo`.
+
+## Frontend (fase 6)
+
+Detalhes e o porquê em `docs/frontend.md`.
+
+- Next.js 16 + TypeScript + Tailwind 4 + TanStack Query + Recharts, em `frontend/`. Leia
+  `node_modules/next/dist/docs/` antes de usar API do Next (mudou muito: `proxy.ts`,
+  Cache Components, `PageProps`).
+- **O navegador nunca fala com a API direto.** `/api/sessao` (login/logout, grava o cookie
+  httpOnly) e `/api/[...caminho]` (repasse com Bearer). Regras de segurança do BFF são
+  funções puras em `src/lib/bff.ts` com testes em `bff.test.ts`: rota nova da API que o
+  frontend usa entra na allowlist de lá.
+- Contrato tipado: mudou schema/rota no backend → `exportar_openapi` + `npm run tipos` e
+  commit dos dois arquivos (o CI confere).
+- Dados via hooks em `src/lib/consultas.ts` (chaves hierárquicas em `chaves`); mutações
+  invalidam o que mudou. Componentes que leem a URL (`useParams`/`usePathname`) ficam
+  dentro de `<Suspense>` (exigência do Cache Components).
+- Visual "caderno": tokens em `globals.css` (`papel`, `tinta`, `apagado`, `fio`, `acento`,
+  `tarja`...), fios em vez de cartões, sem sombras/pílulas. Componentes base em
+  `src/components/ui.tsx`. Todo dado tem estados carregando/erro/vazio.
+- Gráficos (`src/components/graficos.tsx`): forma pelo trabalho do dado, um eixo, marcas
+  finas, tabela equivalente em toda figura; cores `--grafico-destaque/--grafico-contexto`
+  validadas (claro e escuro) com o validador da skill de dataviz.
 
 ## Analytics (fase 5)
 

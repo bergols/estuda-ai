@@ -10,7 +10,8 @@ desempenho por disciplina e tópico.
 banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/modelagem.md),
 [busca semântica](docs/busca-semantica.md), [geração com LLM](docs/geracao-llm.md),
 [repetição espaçada](docs/repeticao-espacada.md), [analytics](docs/analytics.md),
-[segurança](docs/seguranca.md) e [exercícios de SQL](docs/exercicios.md).
+[segurança](docs/seguranca.md), [frontend](docs/frontend.md) e
+[exercícios de SQL](docs/exercicios.md).
 
 ## Stack
 
@@ -21,7 +22,7 @@ banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/mode
 | Busca | embeddings locais (`intfloat/multilingual-e5-small`, 384 dimensões, sentence-transformers) + full-text do Postgres |
 | PDF | PyMuPDF |
 | LLM | API da Anthropic (SDK `anthropic`), padrão Claude Haiku 4.5, saída estruturada validada com Pydantic |
-| Frontend | Next.js + TypeScript (fase 6) |
+| Frontend | Next.js 16 + TypeScript + Tailwind, TanStack Query, Recharts; BFF com cookie httpOnly |
 | Autenticação | argon2id (senhas) + JWT; papel do banco com menor privilégio |
 | Infra | Docker Compose, GitHub Actions (testes + gitleaks) |
 | Testes | pytest contra Postgres real |
@@ -95,6 +96,36 @@ separado:
 ```bash
 docker compose exec backend pytest -m modelo
 ```
+
+### Frontend
+
+Precisa de Node 22+. Com o backend no ar:
+
+```bash
+cp frontend/.env.example frontend/.env.local
+```
+
+No `frontend/.env.local`, coloque em `BFF_SEGREDO` o **mesmo** valor do `BFF_SEGREDO` do
+`.env` da raiz (gere com `openssl rand -hex 32`). Depois:
+
+```bash
+npm --prefix frontend install
+```
+
+```bash
+npm --prefix frontend run dev
+```
+
+Abra http://localhost:3000 e entre com a conta criada por `criar_usuario`. Para ver as
+telas com dados de 6 semanas, a conta de demonstração local (`estudante@estuda-ai.local`,
+senha pública `SENHA_DEV` do script, só para o banco local):
+
+```bash
+docker compose exec backend python -m scripts.seed_revisoes --senha-dev
+```
+
+O navegador nunca fala direto com a API: o Next guarda o login num cookie `httpOnly` e
+repassa as chamadas (ver [docs/frontend.md](docs/frontend.md)).
 
 ### Explorar o banco
 
@@ -278,7 +309,14 @@ estuda-ai/
 │   ├── seguranca.md         # argon2id, JWT, isolamento, SQL injection, rate limit, privilégios
 │   ├── exercicios.md        # exercícios de SQL por fase
 │   └── experimentos/        # resultados gerados por script
-└── frontend/                # fase 6
+└── frontend/
+    ├── openapi.json         # contrato exportado do backend (tipos TS gerados dele)
+    └── src/
+        ├── proxy.ts         # sem cookie de sessão -> /login
+        ├── app/api/         # BFF: /api/sessao (login) e /api/[...caminho] (repasse)
+        ├── app/(app)/       # disciplinas, revisão, painel, conta
+        ├── components/      # ui, gráficos, navegação, tema
+        └── lib/             # cliente tipado, hooks (TanStack Query), regras do BFF
 ```
 
 ## Roadmap
@@ -306,6 +344,7 @@ estuda-ai/
     público, testes de isolamento entre usuários em toda rota, auditoria de SQL injection,
     rate limit e cota diária de IA no Postgres, papel do banco com menor privilégio,
     GitHub Actions (testes contra Postgres+pgvector e gitleaks no histórico).
-  - [ ] Frontend Next.js (disciplinas, busca, perguntas, revisão do dia, questões,
-    dashboard com Recharts).
+  - [x] Frontend Next.js: login (cookie httpOnly via BFF), disciplinas, upload com status,
+    busca, perguntar com fontes, flashcards, questões, revisão do dia, painel com Recharts e
+    conta; celular e modo escuro; tipos gerados do OpenAPI; job do frontend no CI.
   - [ ] Deploy, backup com `pg_dump` e diagrama de arquitetura.

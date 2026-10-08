@@ -380,7 +380,16 @@ mais estreita possível; a mesma frase num commit novo seria detectada de novo. 
 pular o **arquivo inteiro** (testado: uma chave falsa no mesmo doc passava). Exceções
 largas escondem vazamentos de verdade.
 
-## 8. CI
+## 8. No navegador: BFF, cookie httpOnly e CSRF
+
+O frontend (fase 6, parte 2) guarda o JWT num cookie `httpOnly` e fala com a API por um
+BFF no servidor do Next. Ali estão: por que não `localStorage` (um XSS levaria o token),
+CSRF (`SameSite=Lax` + `Sec-Fetch-Site`), a allowlist do proxy (e o bug do `..`
+encontrado pelos testes) e como a API recebe o IP real do cliente sem confiar num header
+que qualquer um escreve (`X-Cliente-IP` só com `X-BFF-Segredo`). Ver
+[`frontend.md`](frontend.md), seção 1.
+
+## 9. CI
 
 `.github/workflows/ci.yml`, a cada push e pull request:
 
