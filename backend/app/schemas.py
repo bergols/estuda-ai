@@ -14,7 +14,6 @@ from typing import Literal
 from pydantic import (
     BaseModel,
     ConfigDict,
-    EmailStr,
     Field,
     StringConstraints,
     field_validator,
