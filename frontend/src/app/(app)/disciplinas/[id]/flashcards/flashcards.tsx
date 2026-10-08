@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Custo, FormularioGerar } from "@/components/geracao";
+import { TextoRico } from "@/components/texto-rico";
 import { Botao, Carregando, Erro, Secao, Vazio } from "@/components/ui";
 import type { Esquemas } from "@/lib/api";
 import { useFlashcards, useGerarFlashcards } from "@/lib/consultas";
@@ -59,10 +60,12 @@ function Ficha({ card }: { card: Esquemas["FlashcardLer"] }) {
     <li>
       <details className="group py-4">
         <summary className="flex cursor-pointer list-none items-baseline justify-between gap-4">
-          <span className="font-serif text-lg">{card.frente}</span>
+          <TextoRico className="font-serif text-lg">{card.frente}</TextoRico>
           <span className="shrink-0 text-xs text-apagado">{card.topico}</span>
         </summary>
-        <p className="mt-3 border-l-2 border-acento pl-3 leading-relaxed">{card.verso}</p>
+        <p className="mt-3 border-l-2 border-acento pl-3 leading-relaxed">
+          <TextoRico>{card.verso}</TextoRico>
+        </p>
       </details>
     </li>
   );
@@ -81,7 +84,7 @@ function ResultadoGeracao({ resultado }: { resultado: Esquemas["FlashcardsGerado
         <ul className="mt-2 space-y-1 text-apagado">
           {resultado.descartados.map((d, i) => (
             <li key={i}>
-              “{d.frente}” ≈ “{d.parecido_com_frente}”{" "}
+              “<TextoRico>{d.frente}</TextoRico>” ≈ “<TextoRico>{d.parecido_com_frente}</TextoRico>”{" "}
               <span className="font-mono">({(d.similaridade * 100).toFixed(0)}% parecido)</span>
             </li>
           ))}

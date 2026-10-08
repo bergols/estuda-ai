@@ -112,6 +112,13 @@ Como fazer bem:
   sustentam (`"trechos": [101, 102]`); não use conhecimento de fora do material.
 - Cards: pergunta objetiva sobre UM conceito; verso de 1 a 3 frases; tópico de 1 a 4
   palavras. Questões: 4 alternativas plausíveis, 1 correta, explicação do porquê.
+- **Fórmulas em LaTeX**: `$x^2$` no meio da frase, `$$\int_0^1 x^2\,dx$$` em destaque (o
+  frontend desenha com KaTeX). Dinheiro fica sem LaTeX ("R$ 10"). Em Cálculo, prefira
+  cards de técnica ("que método usar em $\int x e^x dx$ e por quê?") e questões com a
+  resolução passo a passo na explicação. No JSON, a barra do LaTeX vai dobrada (`\\int`).
+- PDF de matemática costuma ter as fórmulas mal extraídas no texto dos trechos (e PDF
+  escaneado não tem texto): leia o PDF direto (Read, por páginas) para escrever o conteúdo
+  e cite os trechos das páginas correspondentes.
 - Formato do lote no docstring do script. Escreva o JSON num arquivo temporário dentro de
   `~/` (o Colima não monta `/tmp`), rode `--simular`, depois grave e apague o arquivo.
 - PDF maior que 4 MB (limite da Vercel): suba pela API local do servidor, que aceita 20

@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { Botao, Cabecalho, Carregando, Erro, Vazio } from "@/components/ui";
+import { TextoRico } from "@/components/texto-rico";
 import { ErroApi, type Esquemas } from "@/lib/api";
 import { chaves, useDisciplinas, useFilaDoDia, useRevisar } from "@/lib/consultas";
 import { dataCurta } from "@/lib/formato";
@@ -143,11 +144,17 @@ function Sessao({ cards, recomecar }: { cards: Card[]; recomecar: () => void }) 
       </div>
 
       <article className="min-h-48">
-        <p className="font-serif text-2xl leading-snug sm:text-3xl">{card.frente}</p>
+        <p className="font-serif text-2xl leading-snug sm:text-3xl">
+          <TextoRico>{card.frente}</TextoRico>
+        </p>
         {Number(card.atraso_dias) >= 1 && (
           <p className="mt-2 text-xs text-errado">atrasado {Math.floor(Number(card.atraso_dias))} dia(s)</p>
         )}
-        {virado && <p className="mt-6 border-l-2 border-acento pl-4 text-lg leading-relaxed">{card.verso}</p>}
+        {virado && (
+          <p className="mt-6 border-l-2 border-acento pl-4 text-lg leading-relaxed">
+            <TextoRico>{card.verso}</TextoRico>
+          </p>
+        )}
       </article>
 
       <div className="mt-8">

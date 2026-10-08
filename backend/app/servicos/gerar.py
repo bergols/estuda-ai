@@ -118,6 +118,7 @@ Regras:
 - "topico": o assunto em 1 a 4 palavras. "trechos": os ids (ex.: "T3") dos trechos que sustentam o card.
 - Não repita conceitos entre os cards nem os conceitos listados em <ja_existentes>.
 - Gere no máximo a quantidade pedida; se os trechos só sustentam menos cards bons, gere menos.
+- Fórmulas matemáticas em LaTeX: $...$ no meio da frase e $$...$$ em destaque (ex.: $f'(x) = 2x$, $$\\int_0^1 x^2\\,dx = \\tfrac{1}{3}$$). Valores em dinheiro sem LaTeX: "R$ 10".
 - Escreva em português."""
 
 
@@ -291,6 +292,7 @@ Regras:
 - As alternativas erradas devem ser plausíveis (erros comuns de quem estuda o assunto), mas claramente erradas segundo os trechos.
 - "explicacao": por que a correta está certa e, se útil, por que a distratora mais tentadora está errada.
 - "dificuldade": de 1 (fácil) a 5 (difícil). "topico": 1 a 4 palavras. "trechos": ids dos trechos usados.
+- Fórmulas matemáticas em LaTeX: $...$ no meio da frase e $$...$$ em destaque (ex.: $f'(x) = 2x$, $$\\int_0^1 x^2\\,dx = \\tfrac{1}{3}$$). Valores em dinheiro sem LaTeX: "R$ 10".
 - Gere no máximo a quantidade pedida. Escreva em português."""
 
 

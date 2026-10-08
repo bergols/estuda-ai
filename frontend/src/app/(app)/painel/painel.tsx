@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { ChaveLinha, Colunas, Figura, LinhaEnfase, Tabela } from "@/components/graficos";
+import { TextoRico } from "@/components/texto-rico";
 import { Botao, Cabecalho, Carregando, Erro, Vazio } from "@/components/ui";
 import type { Esquemas } from "@/lib/api";
 import {
@@ -282,7 +283,7 @@ function CardsDificeis({ disciplinaId }: { disciplinaId?: number }) {
               <tr key={c.flashcard_id} className="border-b border-fio/60 align-baseline">
                 <td className="py-2 font-mono text-apagado tabular-nums">{c.posicao_rank}</td>
                 <td className="py-2">
-                  {c.frente}
+                  <TextoRico>{c.frente}</TextoRico>
                   <span className="block text-xs text-apagado">
                     {c.disciplina}
                     {c.topico && ` · ${c.topico}`}

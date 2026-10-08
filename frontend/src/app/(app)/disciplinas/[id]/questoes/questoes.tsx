@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Custo, FormularioGerar } from "@/components/geracao";
+import { TextoRico } from "@/components/texto-rico";
 import { Botao, Carregando, Erro, Secao, Vazio } from "@/components/ui";
 import type { Esquemas } from "@/lib/api";
 import { useGerarQuestoes, useQuestoes, useResponderQuestao } from "@/lib/consultas";
@@ -74,7 +75,7 @@ function Questao({ numero, questao }: { numero: number; questao: Esquemas["Quest
     <li className="py-6">
       <p className="mb-4 font-serif text-lg leading-relaxed">
         <span className="mr-2 font-mono text-sm text-apagado">{numero}.</span>
-        {questao.enunciado}
+        <TextoRico>{questao.enunciado}</TextoRico>
       </p>
       <ul className="space-y-1">
         {questao.alternativas.map((a) => {
@@ -98,7 +99,7 @@ function Questao({ numero, questao }: { numero: number; questao: Esquemas["Quest
                 }`}
               >
                 <span className="font-mono">{letra})</span>
-                <span>{a.texto}</span>
+                <TextoRico>{a.texto}</TextoRico>
               </button>
             </li>
           );
@@ -108,7 +109,11 @@ function Questao({ numero, questao }: { numero: number; questao: Esquemas["Quest
       {resultado && (
         <div className={`mt-4 border-l-2 pl-3 text-sm ${resultado.correta ? "border-certo" : "border-errado"}`}>
           <p className="font-medium">{resultado.correta ? "Certa." : `Errada: a resposta é ${resultado.alternativa_correta}.`}</p>
-          {resultado.explicacao && <p className="mt-1 leading-relaxed text-apagado">{resultado.explicacao}</p>}
+          {resultado.explicacao && (
+            <p className="mt-1 leading-relaxed text-apagado">
+              <TextoRico>{resultado.explicacao}</TextoRico>
+            </p>
+          )}
         </div>
       )}
     </li>

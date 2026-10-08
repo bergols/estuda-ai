@@ -3,6 +3,7 @@
 import { type FormEvent } from "react";
 
 import { Custo } from "@/components/geracao";
+import { TextoRico } from "@/components/texto-rico";
 import { AreaTexto, Botao, Erro, Secao } from "@/components/ui";
 import { usePerguntar } from "@/lib/consultas";
 import { paginas } from "@/lib/formato";
@@ -45,7 +46,9 @@ export function Perguntar() {
       {r && (
         <article>
           <Secao titulo={r.encontrado ? "Resposta" : "Não encontrado nos materiais"}>
-            <p className="font-serif text-lg leading-relaxed whitespace-pre-line">{r.resposta}</p>
+            <p className="font-serif text-lg leading-relaxed whitespace-pre-line">
+              <TextoRico>{r.resposta}</TextoRico>
+            </p>
             <Custo geracao={r.geracao} />
           </Secao>
           {r.citacoes.length > 0 && (

@@ -167,6 +167,26 @@ Armadilha encontrada no CI: `LayoutProps`, `PageProps` e `RouteContext` são tip
   API deu; um 500 fica genérico.
 - **Teclado:** foco sempre visível; na revisão, espaço vira o card e 0 a 5 dão a nota.
 
+### Fórmulas (KaTeX)
+
+Cards, questões, alternativas, explicações, a revisão do dia, as respostas do Perguntar e
+os cards difíceis do painel aceitam LaTeX: `$x^2$` no meio da frase, `$$...$$` ou `\[...\]`
+em destaque, `\(...\)` inline (`components/texto-rico.tsx`). Os trechos dos PDFs (busca e
+fontes) continuam texto puro: são o material como foi extraído.
+
+- **O cifrão do real.** "R$ 10" e "US$ 5" não podem virar fórmula. `lib/formulas.ts` usa
+  as regras do pandoc (o `$` que abre não tem espaço depois; o que fecha não tem espaço
+  antes nem número depois) e mais uma: o `$` colado depois de letra ou número (R$, US$)
+  nunca abre fórmula. `\$` é um cifrão literal. Os testes cobrem os casos de dinheiro.
+- **Segurança.** A saída do KaTeX entra com `dangerouslySetInnerHTML`, então a configuração
+  é a defesa: `trust: false` desliga `\href`, `\url`, `\includegraphics` e `\html*`, e o KaTeX
+  escapa o resto. Testado: `\href{javascript:...}` não vira link, e `<img onerror=...>` sai
+  como texto escapado. Um material ou uma resposta maliciosa não injeta HTML na página.
+- **Erro de LaTeX** aparece em vermelho, com o código, em vez de quebrar a tela
+  (`throwOnError: false`).
+- Os prompts da geração (API) pedem fórmulas nesse formato; o mesmo vale para o conteúdo
+  escrito pelo Claude Code (`CLAUDE.md`).
+
 ### Gráficos
 
 As formas foram escolhidas pelo **trabalho** de cada dado, não por variedade:

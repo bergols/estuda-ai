@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Source_Serif_4 } from "next/font/google";
 
 import { Provedores } from "./provedores";
+import "katex/dist/katex.min.css"; // fórmulas (components/texto-rico.tsx)
 import "./globals.css";
 
 const serifa = Source_Serif_4({ variable: "--fonte-serifa", subsets: ["latin"] });
