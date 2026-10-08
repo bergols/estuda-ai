@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "tipos": "openapi-typescript openapi.json -o src/lib/api-schema.d.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",
