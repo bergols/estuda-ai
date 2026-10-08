@@ -17,9 +17,9 @@ banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/mode
 
 ```mermaid
 flowchart LR
-    U["Navegador / celular"] -- HTTPS --> C["Caddy<br/>(HTTPS, única porta aberta)"]
-    C --> N["Next.js<br/>telas + BFF<br/>(cookie httpOnly)"]
-    N -- "Bearer JWT + IP do cliente<br/>(rede interna)" --> B["FastAPI<br/>papel estuda_ai_app"]
+    U["Navegador / celular"] -- HTTPS --> N["Vercel: Next.js<br/>telas + BFF<br/>(cookie httpOnly)"]
+    N -- "HTTPS + X-BFF-Segredo<br/>Bearer JWT, IP do cliente" --> C["Caddy na VM Oracle<br/>(sem o segredo: 404)"]
+    C --> B["FastAPI<br/>papel estuda_ai_app"]
     B -- "SQL (bind parameters)" --> P[("PostgreSQL 16<br/>pgvector · HNSW · GIN<br/>MV de analytics")]
     B -- "embeddings locais" --> E["e5-small<br/>(384 dim)"]
     B -- "RAG: trechos rotulados" --> A["API da Anthropic<br/>(Claude Haiku)"]
@@ -34,8 +34,9 @@ flowchart LR
   migrations mudam o schema ([segurança](docs/seguranca.md), seção 6).
 - **Busca:** semântica (pgvector + HNSW), textual (tsvector + GIN) e híbrida (RRF), sempre
   filtrada pela disciplina do usuário.
-- **Em produção:** uma VM grátis da Oracle (São Paulo), o mesmo `docker compose`, API e
-  banco sem porta exposta ([deploy](docs/deploy.md)).
+- **Em produção (grátis):** o frontend na Vercel, com deploy a cada push. A API e o
+  Postgres ficam numa VM Always Free da Oracle (São Paulo), atrás do Caddy, e só o BFF
+  consegue falar com a API ([deploy](docs/deploy.md)).
 
 ## Stack
 
@@ -308,11 +309,12 @@ docker compose exec backend python -m scripts.experimento_analytics
 
 ## Deploy
 
-Produção numa VM grátis da Oracle Cloud (ARM, região São Paulo), com
-`docker-compose.prod.yml`: Caddy (HTTPS automático) → Next → API → Postgres, com só as
-portas 80/443 abertas. O passo a passo completo (conta, VM, domínio, chave de deploy,
-segredos gerados no servidor) está em [docs/deploy.md](docs/deploy.md). Em resumo, já na
-VM:
+Grátis, para uso pessoal: o **frontend na Vercel** (importando o repositório, *Root
+Directory* `frontend`) e a **API + Postgres numa VM Oracle Always Free** (ARM, São Paulo)
+com `docker-compose.prod.yml`. Nela, o Caddy faz o HTTPS e só deixa passar quem traz o
+`BFF_SEGREDO`. O passo a passo completo (conta, VM, domínio, chave de deploy, segredos
+gerados no servidor, variáveis da Vercel) está em [docs/deploy.md](docs/deploy.md). Em
+resumo, já na VM:
 
 ```bash
 sudo deploy/preparar-servidor.sh

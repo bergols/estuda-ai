@@ -1,0 +1,29 @@
+# Caddy no modo "tudo na VM" (sem Vercel): use com CADDYFILE=Caddyfile.completo e
+# docker compose --profile frontend-na-vm. A única porta aberta para a internet (80 e 443).
+# - HTTPS automático (Let's Encrypt) para {$DOMINIO}, com renovação sozinho.
+# - Repassa tudo para o Next (que é o BFF). A API nem tem porta publicada: só o Next a
+#   alcança, pela rede interna do Docker.
+# - X-Forwarded-For: sem "trusted_proxies" configurado, o Caddy IGNORA o
+#   X-Forwarded-For que chega da internet e escreve o IP real da conexão. É nele que
+#   o Next confia para repassar o IP à API (limite de login por IP).
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	header {
+		# HTTPS sempre (o navegador lembra por 1 ano e nem tenta http://)
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# PDFs de até 20 MB (MAX_UPLOAD_MB) + folga do multipart
+	request_body {
+		max_size 25MB
+	}
+
+	reverse_proxy frontend:3000
+}

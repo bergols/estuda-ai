@@ -28,7 +28,9 @@ Fases 1 (fundação + modelagem), 2 (upload de PDF, embeddings, busca semântica
 híbrida, experimento HNSW), 3 (RAG com a API da Anthropic: perguntar, flashcards,
 questões, tentativas, auditoria de custos), 4 (SM-2, fila do dia, concorrência, fuso) e 5
 (analytics com SQL avançado, views e materialized view) concluídas. Fase 6 em 3 sessões:
-(1) segurança + CI, (2) frontend Next.js e (3) deploy **concluídas**. Produção: VM
+(1) segurança + CI, (2) frontend Next.js e (3) deploy **concluídas**. Produção: frontend
+na Vercel (Root Directory `frontend`, região gru1, corpo de requisição máx. 4,5 MB → PDFs
+até 4 MB no upload) + API/Postgres numa VM
 Oracle Always Free (ARM, São Paulo, 1 OCPU/4 GB: a memória precisa ficar acima de 20% para a VM não ser "ociosa") escolhida pelo autor ("grátis, só para
 eu usar"), com `docker-compose.prod.yml`. A criação da conta/VM/domínio é tarefa manual
 do autor (`docs/deploy.md`, seção 4). Roadmap no `README.md`.
@@ -187,7 +189,10 @@ Detalhes e o porquê em `docs/frontend.md`.
 
 Detalhes em `docs/deploy.md`.
 
-- `docker-compose.prod.yml` (projeto `estuda-ai-prod`): só o Caddy publica portas;
+- `docker-compose.prod.yml` (projeto `estuda-ai-prod`), modo padrão "Vercel + VM": o Caddy
+  (`deploy/Caddyfile`) publica só a API e responde 404 a quem não traz o `X-BFF-Segredo`
+  (exceto `/health`). Modo "tudo na VM": `CADDYFILE=Caddyfile.completo` + perfil
+  `frontend-na-vm`. Só o Caddy publica portas;
   redes `dados` (interna, db↔backend), `app` (backend↔frontend) e `borda`
   (frontend↔caddy). Serviço novo entra só nas redes de que precisa; nada de `ports` além
   do Caddy. O frontend recebe só `BACKEND_URL` e `BFF_SEGREDO`.

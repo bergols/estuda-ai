@@ -9,6 +9,10 @@ import { COOKIE_SESSAO, cabecalhosDoBff, origemConfiavel, urlDaApi } from "@/lib
  * Regras (allowlist, CSRF, IP) em lib/bff.ts, com testes em lib/bff.test.ts.
  */
 
+// Gerações com IA levam dezenas de segundos. Na Vercel (plano Hobby com Fluid compute)
+// o padrão já é 300 s; o valor explícito documenta a expectativa e vale em outros hosts.
+export const maxDuration = 120;
+
 async function repassar(request: NextRequest, ctx: RouteContext<"/api/[...caminho]">) {
   const { caminho } = await ctx.params;
   if (!caminhoPermitido(caminho)) {

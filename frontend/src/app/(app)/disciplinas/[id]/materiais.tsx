@@ -68,8 +68,16 @@ export function Materiais() {
   );
 }
 
+/**
+ * Na Vercel, o corpo de uma requisição a uma função (o BFF) tem no máximo 4,5 MB: um PDF
+ * maior nem chega à API (erro 413). O limite vem de NEXT_PUBLIC_LIMITE_UPLOAD_MB (padrão
+ * 4); no modo "tudo na VM", suba para 20 (o MAX_UPLOAD_MB da API).
+ */
+const LIMITE_UPLOAD_MB = Number(process.env.NEXT_PUBLIC_LIMITE_UPLOAD_MB ?? 4);
+
 function Envio({ disciplinaId }: { disciplinaId: number }) {
   const enviar = useEnviarMaterial(disciplinaId);
+  const [grande, setGrande] = useState<string | null>(null);
   const formulario = useRef<HTMLFormElement>(null);
   const [nomeArquivo, setNomeArquivo] = useState<string | null>(null);
 
@@ -78,6 +86,14 @@ function Envio({ disciplinaId }: { disciplinaId: number }) {
     const form = new FormData(evento.currentTarget);
     const arquivo = form.get("arquivo");
     if (!(arquivo instanceof File) || arquivo.size === 0) return;
+    if (arquivo.size > LIMITE_UPLOAD_MB * 1024 * 1024) {
+      setGrande(
+        `O PDF tem ${(arquivo.size / 1024 ** 2).toFixed(1)} MB; o limite aqui é ${LIMITE_UPLOAD_MB} MB. ` +
+          "Comprima o PDF (ex.: “Reduzir tamanho” no Preview do Mac) ou divida em partes.",
+      );
+      return;
+    }
+    setGrande(null);
     const titulo = String(form.get("titulo") ?? "").trim() || undefined;
     enviar.mutate(
       { arquivo, titulo },
@@ -112,9 +128,15 @@ function Envio({ disciplinaId }: { disciplinaId: number }) {
           Enviar
         </Botao>
       </form>
+      {grande && (
+        <div role="alert" className="my-4 border-l-2 border-errado bg-alerta px-4 py-3 text-sm">
+          {grande}
+        </div>
+      )}
       {enviar.isError && <Erro erro={enviar.error} />}
       <p className="mt-3 text-xs text-apagado">
-        O texto é extraído, dividido em trechos e indexado para a busca. Leva alguns segundos por página.
+        Até {LIMITE_UPLOAD_MB} MB. O texto é extraído, dividido em trechos e indexado para a busca. Leva alguns
+        segundos por página.
       </p>
     </Secao>
   );

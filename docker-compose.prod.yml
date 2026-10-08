@@ -1,6 +1,12 @@
-# Produção (uma VM): Caddy -> Next (BFF) -> API -> Postgres.
+# Produção numa VM. Dois modos:
 #
-#   docker compose -f docker-compose.prod.yml up -d --build
+# 1. Vercel + VM (padrão): o Next roda na Vercel; aqui ficam Caddy -> API -> Postgres.
+#      docker compose -f docker-compose.prod.yml up -d --build
+#    O Caddy só deixa passar requisições com o X-BFF-Segredo (deploy/Caddyfile).
+#
+# 2. Tudo na VM: Caddy -> Next (BFF) -> API -> Postgres.
+#      CADDYFILE=Caddyfile.completo docker compose -f docker-compose.prod.yml \
+#        --profile frontend-na-vm up -d --build
 #
 # Lê o .env DESTA pasta no servidor (gerado por deploy/gerar-env.sh, fora do git).
 # Diferenças do docker-compose.yml de desenvolvimento:
@@ -51,9 +57,12 @@ services:
       db:
         condition: service_healthy
     networks: [dados, app]
-    # Sem "ports": a API só é alcançada pelo Next, dentro da rede "app".
+    # Sem "ports": a API só é alcançada pela rede "app" (pelo Caddy, no modo Vercel,
+    # que exige o BFF_SEGREDO; pelo Next, no modo tudo-na-VM).
 
   frontend:
+    # Só no modo "tudo na VM" (no modo padrão, o Next roda na Vercel)
+    profiles: [frontend-na-vm]
     build: ./frontend
     restart: unless-stopped
     # Só o que o BFF usa. Nada de env_file: o frontend não precisa (nem deve ver) as
@@ -72,12 +81,13 @@ services:
       - "${PORTA_HTTPS:-443}:443"
     environment:
       DOMINIO: ${DOMINIO}
+      BFF_SEGREDO: ${BFF_SEGREDO} # o Caddy recusa (404) quem não traz o segredo
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
       - caddy_dados:/data # certificados (guardar: o Let's Encrypt limita emissões)
       - caddy_config:/config
-    depends_on: [frontend]
-    networks: [borda]
+    depends_on: [backend]
+    networks: [borda, app]
 
 networks:
   dados:

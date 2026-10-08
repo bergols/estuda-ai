@@ -1,28 +1,38 @@
-# Caddy: a única porta do servidor aberta para a internet (80 e 443).
-# - HTTPS automático (Let's Encrypt) para {$DOMINIO}, com renovação sozinho.
-# - Repassa tudo para o Next (que é o BFF). A API nem tem porta publicada: só o Next a
-#   alcança, pela rede interna do Docker.
-# - X-Forwarded-For: sem "trusted_proxies" configurado, o Caddy IGNORA o
-#   X-Forwarded-For que chega da internet e escreve o IP real da conexão. É nele que
-#   o Next confia para repassar o IP à API (limite de login por IP).
+# Caddy no modo "Vercel + VM" (o padrão): o frontend roda na Vercel e esta VM publica
+# só a API, em https://{$DOMINIO}.
+#
+# A API só responde a quem traz o X-BFF-Segredo certo, ou seja, ao BFF na Vercel. Para
+# qualquer outro (robôs varrendo a internet, alguém que descobriu o domínio), ela
+# simplesmente não existe: 404, inclusive /docs e /auth/login. Defesa em profundidade:
+# mesmo sem isso, toda rota exige JWT; com isso, nem a tela de login fica exposta à
+# força bruta direta. /health fica aberto para monitoramento.
+#
+# Modo alternativo (tudo na VM, sem Vercel): Caddyfile.completo + perfil "frontend-na-vm".
 
 {$DOMINIO} {
 	encode zstd gzip
 
 	header {
-		# HTTPS sempre (o navegador lembra por 1 ano e nem tenta http://)
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 	}
 
-	# PDFs de até 20 MB (MAX_UPLOAD_MB) + folga do multipart
-	request_body {
-		max_size 25MB
+	@saude path /health
+	handle @saude {
+		reverse_proxy backend:8000
 	}
 
-	reverse_proxy frontend:3000
+	@semSegredo not header X-BFF-Segredo {$BFF_SEGREDO}
+	handle @semSegredo {
+		respond 404
+	}
+
+	handle {
+		# A Vercel limita o corpo a 4,5 MB; 25 MB cobre o modo "tudo na VM"
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy backend:8000
+	}
 }

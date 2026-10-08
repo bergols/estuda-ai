@@ -1,8 +1,8 @@
 # Deploy
 
-Fase 6, parte 3. Produção numa VM **grátis** da Oracle Cloud (Always Free, região São
-Paulo), para uso pessoal. Tudo roda num `docker compose` só, o mesmo modelo do
-desenvolvimento.
+Fase 6, parte 3. Produção grátis para uso pessoal: o frontend na **Vercel** (deploy a
+cada push no GitHub) e a API com o Postgres numa VM **Always Free da Oracle Cloud** (região
+São Paulo), num `docker compose` parecido com o do desenvolvimento.
 
 ## 1. Por que esta hospedagem
 
@@ -21,9 +21,11 @@ Opções comparadas em out/2026 (preços mudam; confira antes):
 | Hetzner (CAX11) | €5,99/mês | 4 GB | restringindo servidores novos desde abr/2026; Europa |
 | Render | US$ 25/mês (2 GB) | 2 GB | caro para o projeto |
 
-O critério do autor foi **grátis e só para uso pessoal**. A alternativa mais segura seria
-rodar no próprio Mac com Tailscale (sem nada exposto na internet). A Oracle ganhou por ser
-um deploy de verdade, sempre ligado e acessível de qualquer lugar.
+O critério do autor foi **grátis e só para uso pessoal**, com o frontend publicado pela
+**Vercel** a partir do GitHub. A Vercel não roda a API (seção 2), então a combinação ficou
+**Vercel (Next) + Oracle Always Free (API e banco)**: as duas grátis. A alternativa mais
+segura seria rodar no próprio Mac com Tailscale (sem nada exposto na internet). A Oracle
+ganhou por ser um deploy de verdade, sempre ligado e acessível de qualquer lugar.
 
 ### Os riscos da Oracle e o que fazer com eles
 
@@ -41,90 +43,119 @@ um deploy de verdade, sempre ligado e acessível de qualquer lugar.
 - **"Out of host capacity" ao criar a VM:** a região não tem VM ARM livre naquele momento.
   Tente outro *availability domain* ou outro horário.
 
-## 2. Arquitetura
+## 2. Arquitetura: Vercel (frontend) + Oracle (API e banco)
+
+O autor pediu para publicar o frontend pela Vercel, ligada ao repositório do GitHub
+(deploy automático a cada push). A Vercel só roda o Next: a API precisa de um processo
+sempre ligado com ~1 GB de RAM, Postgres e disco, que ficam na VM da Oracle.
 
 ```mermaid
 flowchart LR
-    U["Navegador / celular"] -- "HTTPS :443" --> C
+    U["Navegador / celular"] -- "HTTPS" --> V["Vercel (gru1)<br/>Next.js: telas + BFF<br/>cookie httpOnly"]
+    V -- "HTTPS + X-BFF-Segredo<br/>Bearer JWT, X-Cliente-IP" --> C
     subgraph VM["VM Oracle (Ubuntu 24.04 ARM, 1 OCPU / 4 GB)"]
         direction LR
-        C["Caddy<br/>HTTPS automático"] -- "rede borda" --> N["Next.js<br/>BFF"]
-        N -- "rede app" --> B["FastAPI<br/>+ modelo e5"]
+        C["Caddy :443<br/>sem o segredo: 404"] -- "rede app" --> B["FastAPI<br/>+ modelo e5"]
         B -- "rede dados<br/>(sem internet)" --> P[("Postgres 16<br/>+ pgvector")]
         B --- V1[("volume<br/>uploads")]
-        P --- V2[("volume<br/>pgdata")]
     end
     B -- "API" --> A["Anthropic"]
     CR["cron 04:00 UTC<br/>deploy/backup.sh"] -.-> P
-    CR -.-> V1
 ```
 
-- Só o **Caddy** publica portas (80/443). A API e o banco não têm porta aberta; a API só é
-  alcançada pelo Next. O `/docs` do FastAPI, por exemplo, não existe para a internet.
-- **Três redes Docker**, cada serviço só nas que precisa (menor privilégio também na
-  rede). A rede `dados` é `internal`: o Postgres nem consegue sair para a internet.
-- O backend roda como usuário sem privilégios (uid 10001), sem `--reload` e sem as
+- Na VM, só o **Caddy** publica portas (80/443). O banco não tem porta, e a rede `dados` é
+  `internal` (o Postgres nem sai para a internet). O backend roda sem root e sem as
   ferramentas de desenvolvimento.
-- **X-Forwarded-For:** sem `trusted_proxies`, o Caddy ignora o `X-Forwarded-For` que vem
-  da internet e escreve o IP real da conexão. O Next repassa esse IP à API, que só aceita
-  com o `BFF_SEGREDO` (ver `frontend.md`). Isso fecha o ponto que ficou da sessão 2.
+- **A API só existe para o BFF.** O Caddy só repassa requisições que trazem o
+  `X-BFF-Segredo` certo. Para qualquer outro (robôs, scanners, quem descobrir o domínio),
+  tudo responde 404, inclusive `/docs` e `/auth/login`. Testado: sem segredo ou com
+  segredo errado dá 404; com o segredo, a requisição chega à API. O `/health` fica aberto
+  para monitoramento.
+- **IP do cliente:** a Vercel sobrescreve o `X-Forwarded-For` (contra falsificação). O
+  BFF repassa esse IP em `X-Cliente-IP`, e a API só aceita o valor junto com o segredo.
+- **Limites da Vercel (plano Hobby):**
+  - Uma função pode rodar até 300 s, folga para as gerações com IA (`maxDuration = 120`
+    no BFF).
+  - O corpo da requisição tem no máximo **4,5 MB**. Como o PDF passa pelo BFF, o frontend
+    recusa antes de enviar um PDF acima de `NEXT_PUBLIC_LIMITE_UPLOAD_MB` (padrão 4) e
+    sugere comprimir. A solução completa é um upload direto do navegador para a API, com
+    um tíquete de curta duração assinado pela API (o padrão *presigned upload*). Fica
+    como próximo passo.
+  - Uso não comercial (projeto pessoal).
+- Alternativa sem Vercel (tudo na VM): `CADDYFILE=Caddyfile.completo` + perfil
+  `frontend-na-vm` no compose. O Caddy então serve o Next, e a API nem é publicada.
 
 ## 3. Variáveis de ambiente (nunca no código)
 
-O `.env` de produção é **gerado no servidor** por `deploy/gerar-env.sh`: cada segredo sai
-de `openssl rand -hex 32` ali mesmo, com permissão 600. Ele nunca passa por chat, e-mail ou
-git. Quem vê o quê:
+**Na VM:** o `.env` é gerado no próprio servidor por `deploy/gerar-env.sh`. Cada segredo
+sai de `openssl rand -hex 32`, com permissão 600, sem passar por chat, e-mail ou git.
 
-| Variável | db | backend | frontend | Caddy |
-|---|---|---|---|---|
-| `POSTGRES_*` (dono) | sim | via `MIGRATION_DATABASE_URL` | não | não |
-| `DATABASE_URL` (papel da app) | não | sim | não | não |
-| `JWT_SECRET` | não | sim | não | não |
-| `BFF_SEGREDO` | não | sim | sim | não |
-| `ANTHROPIC_API_KEY` | não | sim | não | não |
-| `DOMINIO` | não | não | não | sim |
+| Variável | db | backend | Caddy |
+|---|---|---|---|
+| `POSTGRES_*` (dono) | sim | via `MIGRATION_DATABASE_URL` | não |
+| `DATABASE_URL` (papel da app) | não | sim | não |
+| `JWT_SECRET` | não | sim | não |
+| `BFF_SEGREDO` | não | sim | sim (para barrar quem não o traz) |
+| `ANTHROPIC_API_KEY` | não | sim | não |
+| `DOMINIO` | não | não | sim |
 
-O frontend recebe só `BACKEND_URL` e `BFF_SEGREDO` (`environment:` explícito, sem
-`env_file`): ele não precisa das senhas do banco, então não as vê.
+**Na Vercel** (Settings → Environment Variables), só três, nenhuma senha de banco:
+
+| Variável | Valor |
+|---|---|
+| `BACKEND_URL` | `https://<seu-subdominio>.duckdns.org` (a API na VM) |
+| `BFF_SEGREDO` | o **mesmo** valor do `.env` da VM |
+| `NEXT_PUBLIC_LIMITE_UPLOAD_MB` | `4` (opcional; é o padrão) |
 
 ## 4. Passo a passo (tarefas manuais)
 
-Os passos 1 a 5 são no navegador e no seu Mac; o resto é no servidor. Eu não crio contas
-nem digito cartão ou senha por você.
+Eu não crio contas nem digito cartão ou senha por você. Cada passo diz onde fazer.
 
-**1. Conta na Oracle Cloud.** Em oracle.com/cloud/free, crie a conta Free Tier. Escolha
-**Brazil East (São Paulo)** como *home region*: ela não muda depois, e o Always Free só
-vale nela. O cartão é só verificação; nada é cobrado dentro dos limites grátis.
+### Parte A: a VM na Oracle (API e banco)
 
-**2. Chave SSH no Mac** (para entrar na VM):
+**A1. Conta na Oracle Cloud.** A região principal (*home region*) deve ser **Brazil
+East (São Paulo)**: ela não muda depois, e o Always Free só vale nela. (Se já criou a conta
+com outra região, a VM grátis tem de ficar nessa outra região. Funciona, só com mais
+latência.)
+
+**A2. Chave SSH, no Mac** (para entrar na VM):
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/oracle_estuda_ai -C "estuda-ai oracle"
 ```
 
-**3. Criar a VM** (Compute → Instances → Create instance):
+**A3. Criar a VM, no console da Oracle** (menu ☰ → Compute → Instances → Create instance):
 
-- imagem **Canonical Ubuntu 24.04** (aarch64);
-- *shape* **VM.Standard.A1.Flex** (Ampere), **1 OCPU e 4 GB** de memória (ver seção 1);
-- *boot volume* de 50 GB (o padrão);
-- em "Add SSH keys", cole o conteúdo de `~/.ssh/oracle_estuda_ai.pub`;
-- anote o **IP público** da VM.
+- **Image:** Change image → Ubuntu → **Canonical Ubuntu 24.04** (a versão *aarch64*);
+- **Shape:** Change shape → Ampere → **VM.Standard.A1.Flex**, com **1 OCPU e 4 GB** de
+  memória (ver seção 1: com mais memória a VM pode ser recuperada como "ociosa");
+- **Networking:** deixe criar a VCN nova e marque **Assign a public IPv4 address**;
+- **Add SSH keys:** "Paste public keys" e cole a saída de `cat ~/.ssh/oracle_estuda_ai.pub`;
+- **Boot volume:** o padrão (~50 GB).
 
-**4. Liberar 80 e 443 na rede da Oracle.** Em Networking → Virtual Cloud Networks → a VCN
-da VM → Security Lists → Default → *Add Ingress Rules*: origem `0.0.0.0/0`, TCP, porta de
-destino `80`; repita para `443`. (O firewall do Ubuntu é a segunda camada; o script do
-passo 7 abre as portas nele.)
+Em **Create**, se aparecer *Out of capacity for shape*, troque o *Availability domain*
+(AD-1, AD-2...) ou tente mais tarde. Quando a VM estiver *Running*, anote o **Public IP
+address**.
 
-**5. Domínio grátis.** Em duckdns.org (login com GitHub), crie um subdomínio, por exemplo
-`meu-estuda-ai.duckdns.org`, e aponte para o IP público da VM. O Caddy precisa do domínio
-para emitir o certificado HTTPS.
+**A4. Liberar 80 e 443 na rede da Oracle.** Na página da VM → a *Subnet* → *Security
+Lists* → *Default Security List* → **Add Ingress Rules**:
 
-**6. Entrar na VM e clonar o repositório** (que é privado). Uma *deploy key* dá acesso de
-leitura a este repositório e a nada mais:
+- Source CIDR `0.0.0.0/0`, IP Protocol **TCP**, Destination Port Range **80**;
+- outra regra igual com **443**.
+
+(O firewall do próprio Ubuntu é a segunda camada; o script do passo A7 cuida dele.)
+
+**A5. Domínio grátis.** Em duckdns.org (login com GitHub), crie um subdomínio, por exemplo
+`meu-estuda-ai`, e em *current ip* coloque o IP público da VM. O endereço da API será
+`https://meu-estuda-ai.duckdns.org`. O Caddy precisa do domínio para o certificado HTTPS.
+
+**A6. Entrar na VM e clonar o repositório (privado) com uma chave só de leitura:**
 
 ```bash
 ssh -i ~/.ssh/oracle_estuda_ai ubuntu@IP_DA_VM
 ```
+
+Já dentro da VM:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/github_estuda_ai -N "" -C "deploy estuda-ai"
@@ -138,23 +169,24 @@ printf 'Host github.com\n  IdentityFile ~/.ssh/github_estuda_ai\n' >> ~/.ssh/con
 cat ~/.ssh/github_estuda_ai.pub
 ```
 
-Cole essa chave pública no GitHub: repositório → Settings → Deploy keys → Add deploy key,
-**sem** marcar "Allow write access". Depois:
+Cole essa chave **pública** no GitHub: repositório → Settings → Deploy keys → Add deploy
+key, **sem** marcar "Allow write access". Ela dá acesso de leitura a este repositório e a
+nada mais. Depois:
 
 ```bash
 git clone git@github.com:bergols/estuda-ai.git && cd estuda-ai
 ```
 
-**7. Preparar o servidor** (Docker, firewall, atualizações automáticas, swap, SSH só com
+**A7. Preparar o servidor** (Docker, firewall, atualizações automáticas, swap, SSH só com
 chave, backup diário):
 
 ```bash
 sudo deploy/preparar-servidor.sh
 ```
 
-Saia e entre de novo no SSH (para o grupo `docker` valer).
+Saia (`exit`) e entre de novo no SSH (para o grupo `docker` valer).
 
-**8. Gerar o `.env` de produção e subir:**
+**A8. Gerar o `.env` e subir a API:**
 
 ```bash
 cd estuda-ai && deploy/gerar-env.sh meu-estuda-ai.duckdns.org
@@ -164,28 +196,52 @@ cd estuda-ai && deploy/gerar-env.sh meu-estuda-ai.duckdns.org
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-A primeira subida leva uns 10 a 15 minutos (build das imagens; o torch é grande). Depois,
-baixe o modelo de embeddings uma vez (~470 MB, fica no volume `modelos`):
+A primeira subida leva uns 10 a 15 minutos (o torch é grande). Depois, baixe o modelo de
+embeddings uma vez:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec backend python -m app.servicos.embeddings
 ```
 
-**9. Criar a sua conta** (a senha é pedida duas vezes, sem aparecer na tela):
+Teste no navegador do Mac: `https://meu-estuda-ai.duckdns.org/health` deve mostrar
+`{"status":"ok",...}`, e `https://meu-estuda-ai.duckdns.org/docs` deve dar **404**. É o
+Caddy escondendo a API de quem não é o BFF.
+
+**A9. Criar a sua conta** (a senha é pedida duas vezes, sem aparecer na tela):
 
 ```bash
 docker compose -f docker-compose.prod.yml exec backend python -m scripts.criar_usuario --email voce@exemplo.com --nome "Seu nome"
 ```
 
-**10. Ligar a IA (opcional).** Edite o `.env` (`nano .env`), descomente `ANTHROPIC_API_KEY=`
-e cole a chave. Depois:
+**A10. Copiar o segredo do BFF para colar na Vercel:**
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d backend
+grep ^BFF_SEGREDO= .env
 ```
 
-**11. Pronto.** Abra `https://meu-estuda-ai.duckdns.org` no celular. "Adicionar à tela de
-início" deixa o app com cara de aplicativo.
+Copie só o valor depois do `=`. **Não cole isso no chat** nem em lugar nenhum além do
+painel da Vercel.
+
+### Parte B: o frontend na Vercel
+
+**B1.** Em vercel.com, entre com o GitHub. **Add New → Project** e importe
+`bergols/estuda-ai`. Se ele não aparecer, use "Adjust GitHub App Permissions" e dê acesso a
+esse repositório.
+
+**B2. Root Directory:** clique em *Edit* e escolha **`frontend`**. A Vercel detecta o
+Next.js; não mude os comandos de build.
+
+**B3. Environment Variables** (tabela da seção 3): `BACKEND_URL` e `BFF_SEGREDO`.
+
+**B4. Deploy.** Em 1 ou 2 minutos sai uma URL `https://<projeto>.vercel.app`. Abra no
+celular, faça login com a conta do passo A9, e use "Adicionar à tela de início" para ficar
+com cara de app. A região das funções já vem em São Paulo (`frontend/vercel.json`).
+
+**B5. (Opcional) Ligar a IA:** na VM, `nano .env`, descomente `ANTHROPIC_API_KEY=`, cole a
+chave e rode `docker compose -f docker-compose.prod.yml up -d backend`.
+
+A partir daí, todo `git push` no `main` publica o frontend sozinho. Para atualizar a API,
+rode `deploy/atualizar.sh` na VM.
 
 ## 5. Backup e restore
 
@@ -287,6 +343,9 @@ A pilha de produção foi testada no Mac (ARM, como a VM), numa cópia do reposi
 | `/api/disciplinas/%2E%2E/docs` (sem normalizar) | 404 |
 | Backup → `DELETE FROM usuarios` → restore | 1 usuário e 1 disciplina de volta |
 | Restore num "servidor novo" (`down -v` e `up` do zero) | dados de volta; `estuda_ai_app` só com `SELECT, INSERT` em `geracoes`; função `SECURITY DEFINER` presente; login pelo HTTPS ok; refresh da MV ok |
+| Modo Vercel: `/docs` e `/auth/login` sem o `X-BFF-Segredo` (ou com um errado) | 404 |
+| Modo Vercel: `/auth/login` com o segredo | chega à API (401 de senha errada) |
+| Modo Vercel: `/health` sem segredo | 200 |
 | Memória com o modelo carregado | backend 961 MB, Next 41 MB, Postgres 35 MB, Caddy 13 MB |
 
 Dois achados do teste:
