@@ -282,6 +282,66 @@ chave e rode `docker compose -f docker-compose.prod.yml up -d backend`.
 A partir daí, todo `git push` no `main` publica o frontend sozinho. Para atualizar a API,
 rode `deploy/atualizar.sh` na VM.
 
+## 4b. Modo provisório: o Mac como servidor (Tailscale Funnel)
+
+Enquanto a Oracle responde "Out of capacity", a API e o banco rodam **no Mac**, com a
+mesma pilha de produção, numa cópia separada do repositório (`~/estuda-ai-servidor`, banco
+próprio). O **Tailscale Funnel** dá ao Mac um endereço HTTPS público e fixo
+(`https://<maquina>.<tailnet>.ts.net`), sem abrir porta no roteador. A Vercel aponta o
+`BACKEND_URL` para ele. Limite: o app só responde com o Mac ligado; desligado, o BFF
+responde 503 "fora do ar".
+
+Como foi montado:
+
+```bash
+gh repo clone bergols/estuda-ai ~/estuda-ai-servidor && cd ~/estuda-ai-servidor
+```
+
+```bash
+deploy/gerar-env.sh ":80"
+```
+
+```bash
+printf 'PORTA_HTTP=127.0.0.1:8080\nPORTA_HTTPS=127.0.0.1:8443\n' >> .env
+```
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+```bash
+tailscale funnel --bg http://127.0.0.1:8080
+```
+
+- `DOMINIO=":80"`: o Funnel termina o HTTPS (certificado Let's Encrypt do `ts.net`) e
+  entrega HTTP local ao Caddy, que então não precisa de certificado.
+- As portas ficam só no `127.0.0.1`: nada exposto na rede Wi-Fi; o único caminho de fora
+  é o túnel. A trava do `X-BFF-Segredo` no Caddy vale igual.
+- O app do Tailscale precisa ser a versão Standalone (`brew install --cask tailscale-app`)
+  ou a da App Store; o Funnel é aprovado uma vez no painel (o comando mostra o link).
+- **Para migrar para a Oracle depois:** `DESTINO=~/backups deploy/backup.sh` no Mac, copiar o
+  `.dump` e o `.tar.gz` para a VM, `deploy/restaurar.sh` lá, trocar o `BACKEND_URL` na
+  Vercel e fazer *Redeploy*. O `BFF_SEGREDO` da VM é outro: atualize também.
+
+Lições do diagnóstico (o primeiro login pela Vercel falhou):
+
+- **Variável nova na Vercel só vale depois de um *Redeploy*.**
+- **O DNS público do Funnel demora a aparecer** (a documentação fala em até 10 minutos;
+  aqui foi mais), e religar o Funnel ajudou.
+- **Com o Tailscale ligado, `dig @1.1.1.1` no Mac é interceptado** e mostrou resposta
+  vazia mesmo depois de o nome já resolver na internet. Para testar o DNS público de
+  dentro do Mac, use DNS-over-HTTPS: `curl "https://dns.google/resolve?name=<host>"`.
+- **Testar "de fora" a partir do Mac engana:** o Mac está dentro da rede Tailscale e
+  resolve o nome pelo MagicDNS. O teste de fora de verdade foi o login pela Vercel.
+- **O Caddy não registra acessos por padrão:** "0 requisições no log" não provava nada. Os
+  Caddyfiles agora têm `log`.
+- O BFF passou a diferenciar falhas: variável ausente (500 dizendo qual), API inalcançável
+  (503 "fora do ar", com o motivo só no log do servidor).
+
+Resultado final, pela Vercel: login errado devolve o 401 da API, e o limite de login
+registrou o IP público real do cliente (a Vercel escreve o `X-Forwarded-For`, o BFF repassa
+com o segredo).
+
 ## 5. Backup e restore
 
 ### O que é feito

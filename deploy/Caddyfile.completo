@@ -10,6 +10,14 @@
 {$DOMINIO} {
 	encode zstd gzip
 
+	# Log de acessos (o Caddy não registra acessos sem isto): na saída do container,
+	# "docker compose -f docker-compose.prod.yml logs caddy". Sem ele, "nenhum pedido
+	# chegou" e "chegou e foi recusado" ficam indistinguíveis num diagnóstico.
+	log {
+		output stdout
+		format console
+	}
+
 	header {
 		# HTTPS sempre (o navegador lembra por 1 ano e nem tenta http://)
 		Strict-Transport-Security "max-age=31536000"
