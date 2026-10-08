@@ -23,6 +23,8 @@ reqwest = { version = "0.13", features = ["json"] }
 # Cofre do sistema: Keychain (macOS), Gerenciador de Credenciais (Windows)
 keyring = "4"
 url = "2"
+# Laço de sincronização: espera com timeout e "acordar" (Notify)
+tokio = { version = "1", features = ["sync", "time"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }

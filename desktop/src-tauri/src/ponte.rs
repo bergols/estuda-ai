@@ -65,7 +65,8 @@ impl Estado {
         Ok(Self { http, base })
     }
 
-    fn origem(&self) -> String {
+    /// Esquema + host + porta do servidor: identifica a conta no cofre e a fila local.
+    pub fn origem(&self) -> String {
         self.base.origin().ascii_serialization()
     }
 }
@@ -80,6 +81,22 @@ pub struct RespostaApi {
 }
 
 impl RespostaApi {
+    pub fn status(&self) -> u16 {
+        self.status
+    }
+
+    pub fn corpo(&self) -> &str {
+        &self.corpo
+    }
+
+    /// A mensagem de erro da API ({"detail": "..."}), ou o status.
+    pub fn detalhe(&self) -> String {
+        serde_json::from_str::<serde_json::Value>(&self.corpo)
+            .ok()
+            .and_then(|v| v.get("detail").and_then(|d| d.as_str()).map(str::to_owned))
+            .unwrap_or_else(|| format!("erro {} do servidor", self.status))
+    }
+
     fn erro(status: StatusCode, detalhe: &str) -> Self {
         Self {
             status: status.as_u16(),

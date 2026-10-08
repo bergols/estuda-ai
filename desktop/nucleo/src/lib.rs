@@ -2,3 +2,5 @@
 //! Ficam aqui para serem testadas rápido, em qualquer máquina (inclusive no CI).
 
 pub mod api;
+
+pub mod fila;

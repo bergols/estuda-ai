@@ -7,6 +7,10 @@
     "core:default",
     "allow-chamar-api",
     "allow-entrar",
-    "allow-sair"
+    "allow-sair",
+    "allow-salvar-sessao",
+    "allow-sessao-em-andamento",
+    "allow-situacao-sincronia",
+    "allow-sincronizar-agora"
   ]
 }

@@ -3,7 +3,15 @@
 /// (allow-chamar-api...) que precisa ser concedida em capabilities/*.json, como as dos
 /// plugins. É o princípio do menor privilégio do banco (papel estuda_ai_app), aplicado
 /// ao IPC: a página só alcança o que foi listado.
-const COMANDOS: &[&str] = &["chamar_api", "entrar", "sair"];
+const COMANDOS: &[&str] = &[
+    "chamar_api",
+    "entrar",
+    "sair",
+    "salvar_sessao",
+    "sessao_em_andamento",
+    "situacao_sincronia",
+    "sincronizar_agora",
+];
 
 fn main() {
     tauri_build::try_build(
