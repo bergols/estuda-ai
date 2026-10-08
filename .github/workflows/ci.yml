@@ -9,6 +9,8 @@ name: CI
 
 on:
   push:
+    # Só branches: uma tag (desktop-v*) aponta para um commit que já passou pelo CI
+    branches: ["**"]
   pull_request:
 
 # O token do GitHub só precisa ler o repositório (menor privilégio também aqui).
