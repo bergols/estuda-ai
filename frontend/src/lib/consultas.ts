@@ -196,3 +196,27 @@ export function useResponderQuestao(disciplinaId: number) {
     onSuccess: () => cliente.invalidateQueries({ queryKey: ["analytics"] }),
   });
 }
+
+// ---------------------------------------------------------- revisão (SM-2)
+
+export function useFilaDoDia(disciplinaId?: number) {
+  return useQuery({
+    queryKey: [...chaves.fila, disciplinaId ?? "todas"],
+    queryFn: () =>
+      dados(api.GET("/revisoes/hoje", { params: { query: { limite: 100, disciplina_id: disciplinaId } } })),
+    // A sessão trabalha sobre uma "foto" da fila: recarregar no meio (ao voltar para a
+    // aba, por exemplo) tiraria da lista os cards já revisados e embaralharia a posição.
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useRevisar() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: ({ flashcardId, ...corpo }: Esquemas["RevisaoEntrada"] & { flashcardId: number }) =>
+      dados(api.POST("/revisoes/{flashcard_id}", { params: { path: { flashcard_id: flashcardId } }, body: corpo })),
+    // A fila NÃO é invalidada aqui (ver useFilaDoDia); o analytics sim.
+    onSuccess: () => cliente.invalidateQueries({ queryKey: ["analytics"] }),
+  });
+}
