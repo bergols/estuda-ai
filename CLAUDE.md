@@ -87,6 +87,38 @@ Armadilhas de ambiente já encontradas:
 - O SDK da Anthropic sem chave lança `TypeError` (não `AnthropicError`): `ClienteLLM.gerar`
   confere a credencial antes.
 
+## Gerar flashcards e questões pelo Claude Code (sem API paga)
+
+O autor assina o Claude e **não** paga a API da Anthropic: quando ele pedir "gera N
+flashcards/questões de <material ou tema>", quem escreve é você (Claude Code), e o
+`scripts/conteudo_claude.py` grava pelas mesmas regras da geração do app (duplicata por
+embedding, ligação com os trechos, 4 alternativas e 1 correta, auditoria com modelo
+`claude-code-assinatura` e custo zero). O banco de "produção" é o do servidor no Mac
+(`~/estuda-ai-servidor`, projeto compose `estuda-ai-prod`), não o de desenvolvimento.
+
+```bash
+cd ~/estuda-ai-servidor
+D="docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.conteudo_claude"
+$D materiais                                   # disciplinas, materiais, nº de trechos
+$D trechos --material 7                        # texto com o id de cada trecho
+$D trechos --disciplina 3 --tema "índices"     # trechos mais relevantes para um tema
+$D importar --simular < /caminho/lote.json     # valida e desfaz
+$D importar < /caminho/lote.json               # grava
+```
+
+Como fazer bem:
+- Leia os trechos ANTES de escrever. Cada card/questão cita os ids dos trechos que o
+  sustentam (`"trechos": [101, 102]`); não use conhecimento de fora do material.
+- Cards: pergunta objetiva sobre UM conceito; verso de 1 a 3 frases; tópico de 1 a 4
+  palavras. Questões: 4 alternativas plausíveis, 1 correta, explicação do porquê.
+- Formato do lote no docstring do script. Escreva o JSON num arquivo temporário dentro de
+  `~/` (o Colima não monta `/tmp`), rode `--simular`, depois grave e apague o arquivo.
+- PDF maior que 4 MB (limite da Vercel): suba pela API local do servidor, que aceita 20
+  MB (login em `http://127.0.0.1:8080` exige o `X-BFF-Segredo` do `.env` do servidor), ou
+  peça ao autor para comprimir.
+- Mudou o script? `git pull` + `docker compose -f docker-compose.prod.yml up -d --build
+  backend` no `~/estuda-ai-servidor` (a imagem de produção não monta o código).
+
 ## Convenções de banco (seguir nas próximas migrations)
 
 - **Migrations escritas à mão**, uma por mudança lógica, com comentários explicando a

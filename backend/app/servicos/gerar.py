@@ -142,6 +142,17 @@ class Descartado:
 
 
 @dataclass
+class CardNovo:
+    """Um card pronto para gravar, com os ids dos trechos de origem. Vem do LLM da API
+    (gerar_flashcards) ou de uma sessão do Claude Code (scripts/conteudo_claude.py)."""
+
+    frente: str
+    verso: str
+    topico: str | None
+    trecho_ids: list[int]
+
+
+@dataclass
 class ResultadoFlashcards:
     criados: list[Flashcard]
     descartados: list[Descartado]
@@ -203,10 +214,36 @@ def gerar_flashcards(
         session, llm, usuario_id=usuario_id, disciplina_id=disciplina_id, tipo="flashcards",
         sistema=SISTEMA_FLASHCARDS, mensagem=mensagem, formato=FlashcardsGerados, validar=validar,
     )
-    cards = resultado.dados.flashcards
-    vetores = embedder.embed_simetrico([texto_para_embedding(c.frente, c.verso) for c in cards])
-
+    cards = [
+        CardNovo(c.frente, c.verso, c.topico, _ids_dos_trechos(contexto, c.trechos))
+        for c in resultado.dados.flashcards
+    ]
     # ---- uma transação: auditoria + cards + associações (tudo ou nada) ----
+    geracao = auditoria.registrar(
+        session, usuario_id=usuario_id, disciplina_id=disciplina_id, tipo="flashcards",
+        modelo=resultado.modelo, uso=resultado.uso, duracao_ms=resultado.duracao_ms,
+    )
+    criados, descartados = persistir_flashcards(
+        session, disciplina_id=disciplina_id, geracao_id=geracao.id, cards=cards, embedder=embedder
+    )
+    session.commit()
+    return ResultadoFlashcards(criados, descartados, geracao)
+
+
+def persistir_flashcards(
+    session: Session,
+    *,
+    disciplina_id: int,
+    geracao_id: int,
+    cards: list[CardNovo],
+    embedder: Embedder,
+) -> tuple[list[Flashcard], list[Descartado]]:
+    """Grava os cards descartando duplicatas, na transação de quem chama (sem COMMIT).
+
+    Usada pela geração via API e pelo Claude Code: as duas portas seguem as mesmas
+    regras (limiar de duplicata, ligação com os trechos, auditoria).
+    """
+    vetores = embedder.embed_simetrico([texto_para_embedding(c.frente, c.verso) for c in cards])
     # Advisory lock por disciplina, liberado no COMMIT. Sem ele, duas gerações
     # simultâneas na mesma disciplina não enxergariam os cards uma da outra (ainda
     # não commitados) e poderiam gravar duplicatas. Com ele, a segunda espera a
@@ -214,10 +251,6 @@ def gerar_flashcards(
     # (1 = "namespace" dos locks de flashcards; o 2º argumento é a disciplina.)
     session.execute(
         text("SELECT pg_advisory_xact_lock(1, CAST(:d AS integer))"), {"d": disciplina_id}
-    )
-    geracao = auditoria.registrar(
-        session, usuario_id=usuario_id, disciplina_id=disciplina_id, tipo="flashcards",
-        modelo=resultado.modelo, uso=resultado.uso, duracao_ms=resultado.duracao_ms,
     )
     criados: list[Flashcard] = []
     descartados: list[Descartado] = []
@@ -236,17 +269,16 @@ def gerar_flashcards(
             continue
         novo = Flashcard(
             disciplina_id=disciplina_id, frente=card.frente, verso=card.verso,
-            topico=card.topico, origem="ia", embedding=vetor, geracao_id=geracao.id,
+            topico=card.topico, origem="ia", embedding=vetor, geracao_id=geracao_id,
         )
         session.add(novo)
         session.flush()  # id do card + visível para a próxima comparação
         session.execute(
             insert(flashcard_trechos),
-            [{"flashcard_id": novo.id, "trecho_id": t} for t in _ids_dos_trechos(contexto, card.trechos)],
+            [{"flashcard_id": novo.id, "trecho_id": t} for t in dict.fromkeys(card.trecho_ids)],
         )
         criados.append(novo)
-    session.commit()
-    return ResultadoFlashcards(criados, descartados, geracao)
+    return criados, descartados
 
 
 # ------------------------------------------------------------ questões
@@ -274,6 +306,17 @@ class QuestaoGerada(BaseModel):
 
 class QuestoesGeradas(BaseModel):
     questoes: list[QuestaoGerada] = Field(min_length=1)
+
+
+@dataclass
+class QuestaoNova:
+    enunciado: str
+    alternativas: list[str]  # na ordem: A, B, C, D...
+    correta: str  # letra
+    explicacao: str | None
+    dificuldade: int | None
+    topico: str | None
+    trecho_ids: list[int]
 
 
 @dataclass
@@ -319,12 +362,29 @@ def gerar_questoes(
         session, usuario_id=usuario_id, disciplina_id=disciplina_id, tipo="questoes",
         modelo=resultado.modelo, uso=resultado.uso, duracao_ms=resultado.duracao_ms,
     )
+    novas = [
+        QuestaoNova(q.enunciado, q.alternativas, q.correta, q.explicacao, q.dificuldade, q.topico,
+                    _ids_dos_trechos(contexto, q.trechos))
+        for q in resultado.dados.questoes
+    ]
+    criadas = persistir_questoes(
+        session, disciplina_id=disciplina_id, geracao_id=geracao.id, questoes=novas
+    )
+    session.commit()
+    return ResultadoQuestoes(criadas, geracao)
+
+
+def persistir_questoes(
+    session: Session, *, disciplina_id: int, geracao_id: int, questoes: list[QuestaoNova]
+) -> list[Questao]:
+    """Grava questões + alternativas + trechos na transação de quem chama (sem COMMIT).
+    O constraint trigger adiado confere no COMMIT: 2+ alternativas e exatamente 1 correta."""
     criadas: list[Questao] = []
-    for q in resultado.dados.questoes:
+    for q in questoes:
         questao = Questao(
             disciplina_id=disciplina_id, enunciado=q.enunciado, tipo="multipla_escolha",
             explicacao=q.explicacao, dificuldade=q.dificuldade, topico=q.topico, origem="ia",
-            geracao_id=geracao.id,
+            geracao_id=geracao_id,
             alternativas=[
                 Alternativa(letra=chr(65 + i), texto=texto.strip(), correta=chr(65 + i) == q.correta)
                 for i, texto in enumerate(q.alternativas)
@@ -334,8 +394,7 @@ def gerar_questoes(
         session.flush()
         session.execute(
             insert(questao_trechos),
-            [{"questao_id": questao.id, "trecho_id": t} for t in _ids_dos_trechos(contexto, q.trechos)],
+            [{"questao_id": questao.id, "trecho_id": t} for t in dict.fromkeys(q.trecho_ids)],
         )
         criadas.append(questao)
-    session.commit()
-    return ResultadoQuestoes(criadas, geracao)
+    return criadas
