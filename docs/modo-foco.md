@@ -9,7 +9,7 @@ A fase tem quatro sessões. Este documento cresce com elas:
 | Sessão | Conteúdo | Estado |
 |---|---|---|
 | 1 | App Tauri, login no desktop, instaladores pelo CI | **concluída** |
-| 2 | Sessões de estudo, sincronização offline com idempotência, analytics | a fazer |
+| 2 | Sessões de estudo, sincronização offline com idempotência, analytics | **concluída** |
 | 3 | Spotify: OAuth com PKCE, token cifrado, player | a fazer |
 | 4 | Bloqueio de programas e sites (arquivo hosts), saída de emergência | a fazer |
 
@@ -161,6 +161,100 @@ renderização, por exemplo). Mesmo assim, ela não pode:
 
 HTTPS é obrigatório fora do `localhost` (`base_da_api`), porque o token vai em toda
 chamada.
+
+## 4b. Sessões de estudo e o timer
+
+A tela `/foco` (só no desktop; na web, o histórico) configura a sessão (método, tempos,
+disciplina, meta), põe a janela em tela cheia por cima de tudo e mostra o tempo, a fase e a
+meta. Arquivos: `frontend/src/lib/foco/timer.ts` (motor), `sessao.ts` (a sessão no formato da
+API), `local.ts` (ponte para o SQLite) e `frontend/src/app/(app)/foco/`.
+
+**O timer não conta ticks.** Guarda só o instante de início e as pausas manuais e calcula a fase
+atual por subtração:
+
+```
+tempo de plano = (agora − início) − pausas manuais
+```
+
+Um contador incrementado por `setInterval` erra quando o navegador desacelera a janela em
+segundo plano, quando o notebook dorme ou quando o app reabre. A subtração de instantes não
+erra (há um teste "o notebook dormiu 3 horas"). Tudo é função pura que recebe `agora` como
+parâmetro: os testes passam um relógio falso e não esperam 25 minutos.
+
+| Método | Plano |
+|---|---|
+| Pomodoro | focos de 25 min, pausas de 5, pausa longa de 15 a cada 4 (configurável) |
+| Bloco contínuo | um foco só, da duração da meta (ex.: 60 min), sem pausa |
+| 52/17 | 52 de foco, 17 de pausa |
+| Personalizado | foco, pausa e ciclos à escolha |
+
+Regras que vieram dos testes:
+- **Pausa manual só durante o foco.** Pausar no meio de uma pausa planejada sobreporia os dois
+  intervalos e contaria a pausa em dobro.
+- **Saída da janela** (o Tauri avisa quando ela perde o foco) vira evento com a duração, mas só
+  durante o foco e acima de 3 s: alt-tab acidental não é interrupção, e sair na pausa é o esperado.
+- **Concluída × abandonada:** concluída se o foco planejado foi cumprido.
+- **App fechado ou travado no meio:** a tela grava uma "batida de vida" a cada 30 s. Ao reabrir,
+  "Continuar" transforma o tempo fechado em pausa manual, e "Encerrar" termina no último sinal de
+  vida. Sem isso, como o timer calcula pelo relógio, três horas de app fechado virariam três
+  horas de foco.
+- **Tela cheia no macOS:** a tela cheia nativa cria um Space separado, e Cmd+Tab só troca de
+  Space ("sempre por cima" não serve para nada). O comando `modo_foco` usa a tela cheia
+  *simples*, que cobre a tela no Space atual, e a mantém visível em todos os Spaces.
+
+## 4c. Sincronização offline e chaves de idempotência
+
+```mermaid
+sequenceDiagram
+    participant T as Tela (/foco)
+    participant L as SQLite local (Rust)
+    participant S as Laço de envio (Rust)
+    participant A as API (Postgres)
+    T->>L: salvar_sessao (a cada mudança; não espera rede)
+    L-->>S: acordar
+    S->>L: pendentes (versao_enviada < versao)
+    S->>A: POST /sessoes/sincronizar (lote)
+    A-->>S: criada / atualizada / sem_mudanca / recusada (por sessão)
+    S->>L: confirmar(chave, versão ENVIADA)
+    Note over S,A: sem rede: tudo fica na fila; tenta de novo em 30 s
+```
+
+**O problema que a chave de idempotência resolve.** O app manda a sessão; o servidor grava;
+a resposta se perde (Wi-Fi caiu, timeout). Para o app, não dá para saber se gravou. Ele precisa
+mandar de novo, e sem proteção a sessão entraria duas vezes: o gráfico de horas de foco dobraria.
+
+A solução tem três partes:
+1. **A chave nasce no app**, quando a sessão (ou a pausa, ou o evento) acontece: um UUID gravado
+   junto no SQLite. Não pode ser o `id` do banco, porque ele só existe depois do envio que talvez
+   tenha falhado.
+2. **O banco garante a unicidade:** `UNIQUE (usuario_id, chave)` nas sessões e `UNIQUE (sessao_id,
+   chave)` nas pausas e eventos.
+3. **O servidor usa `INSERT ... ON CONFLICT`:** a primeira vez insere; as próximas não duplicam.
+   A sessão só pode avançar de "em andamento" para concluída ou abandonada (`DO UPDATE ...
+   WHERE`), então um envio antigo chegando fora de ordem é ignorado.
+
+Com isso, o protocolo pode ser o mais simples possível: **"mande a sessão inteira sempre que ela
+mudou desde o último envio confirmado"**. Reenviar o que o servidor já tem é inofensivo.
+
+Detalhes que os testes mostraram:
+- **Versões, não "enviada sim/não".** Cada gravação local incrementa `versao`; a confirmação grava
+  `versao_enviada` com a versão que *foi enviada*. Se um evento chega durante o envio, a sessão
+  continua pendente. Um booleano perderia essa mudança.
+- **Mensagem envenenada.** Uma sessão que viola uma regra do banco é recusada **sozinha** (cada
+  sessão num `SAVEPOINT`), e o app não a reenvia (falharia para sempre). Sem isso, um lote com uma
+  sessão ruim travaria todas as outras.
+- **Corrida de dois envios simultâneos** (`tests/test_sessoes.py`, conexões reais): o 2º envio
+  espera no índice único até o 1º dar COMMIT; o `ON CONFLICT` vê a linha, o `WHERE` recusa
+  atualizar, e o `SELECT` de reserva na mesma consulta não acha a linha, porque o *snapshot* do
+  comando é de antes do COMMIT do outro. Resultado: "nenhuma linha" e um erro 500. A correção é
+  reler num comando novo (snapshot novo). Detalhes em `backend/app/servicos/sessoes.py`.
+- **Dois relógios.** `iniciada_em`/`ocorrido_em` vêm do computador; `recebido_em`, do servidor. Data
+  mais de 24 h no futuro (relógio errado) é recusada.
+
+O SQLite local fica na pasta de dados do app (`~/Library/Application Support/
+io.github.bergols.estudaai/estuda-ai.db` no Mac, `%APPDATA%\io.github.bergols.estudaai\` no
+Windows), em modo WAL (a tela grava enquanto o laço lê) e com `CHECK (json_valid(...))`. A fila é
+separada por servidor (`origem`): sessão feita contra o localhost nunca vai para a produção.
 
 ## 5. Instaladores e CI
 

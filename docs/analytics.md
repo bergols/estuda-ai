@@ -439,3 +439,106 @@ de antemão:
 | calendário | 1, 2, 3, 4 revisões | níveis 1, 2, 3, 4; dias vazios nível 0 |
 | custos | 2 meses, 2 tipos, 1 às 23h30 de 31/08 | acumulados exatos; 23h30 conta em agosto |
 | materialized view | revisão depois do refresh | só aparece depois do próximo refresh |
+
+---
+
+## 11. Sessões de estudo (fase 7)
+
+`app/servicos/analytics_foco.py`, rotas em `/analytics/foco/*`. A fonte é a view
+`vw_sessoes_foco` (uma linha por sessão com foco efetivo, pausas, tempo fora da janela e
+interrupções; ver `modelagem.md`). Lidas **ao vivo**, sem materialized view: são poucas
+linhas por usuário (uma por sessão) e a sessão que acabou de sincronizar deve aparecer na hora.
+Sessões em andamento ficam de fora de tudo (ainda não têm duração real).
+
+| Rota | Conceito |
+|---|---|
+| `foco/horas?agrupar=dia\|semana` | densificar com `generate_series`; filtro sargable **através de uma view** |
+| `foco/sessoes` | `GROUP BY ROLLUP` + `GROUPING()`; grade fixa com `VALUES` |
+| `foco/interrupcoes` | top-N recente reordenado; taxa por hora com `nullif` |
+| `foco/acerto-pos-sessao` | `LEFT JOIN LATERAL` top-1 por linha + Index Only Scan Backward |
+
+### Filtro sargable através de uma view
+
+`vw_sessoes_foco` tem a coluna `dia` (uma expressão `AT TIME ZONE`). Filtrar por `v.dia BETWEEN
+...` faria o Postgres calcular o dia de **todas** as sessões do usuário antes de filtrar. O
+filtro usa `v.iniciada_em` crua (`_periodo()`, seção 9): uma view simples é *inlined* pelo
+planejador (vira parte da consulta), a condição desce até `sessoes_estudo` e o índice
+`(usuario_id, iniciada_em)` atende.
+
+### `ROLLUP`: por método e o total, numa passada
+
+`GROUP BY ROLLUP (metodo)` é atalho para `GROUPING SETS ((metodo), ())`: as linhas por método e
+uma linha a mais com o total. `GROUPING(metodo) = 1` identifica essa linha (vira `'todos'`). A
+grade `VALUES ('pomodoro', 1), ..., ('todos', 5)` + `LEFT JOIN` faz um método nunca usado
+aparecer com zero, sempre na mesma ordem: no gráfico, a cor segue o método, não a posição.
+
+### Acerto logo depois de cada método: `LATERAL` top-1
+
+Para **cada resposta** (revisão ou questão, de `vw_respostas`), qual foi a última sessão que
+terminou até 60 minutos antes?
+
+```sql
+FROM vw_respostas AS r
+LEFT JOIN LATERAL (
+    SELECT s.metodo FROM sessoes_estudo AS s
+    WHERE s.usuario_id = r.usuario_id
+      AND s.terminada_em IS NOT NULL
+      AND s.terminada_em <= r.respondido_em
+      AND s.terminada_em >  r.respondido_em - make_interval(mins => :janela_min)
+    ORDER BY s.terminada_em DESC
+    LIMIT 1
+) AS ultima ON true
+```
+
+`LATERAL` deixa a subconsulta enxergar a linha de fora (`r`). É o mesmo "top-1 por grupo" da
+fila do dia (fase 4). `LEFT JOIN ... ON true`: resposta sem sessão antes continua na conta,
+no grupo `sem_sessao`, que é a base de comparação.
+
+O índice da migration `indice_sessoes_terminada_em`:
+
+```sql
+CREATE INDEX ix_sessoes_estudo_usuario_terminada_em
+    ON sessoes_estudo (usuario_id, terminada_em) INCLUDE (metodo)
+    WHERE terminada_em IS NOT NULL;
+```
+
+Medido com o seed de 200 alunos (5.007 sessões; a conta demo tem 2.450 respostas):
+
+| Situação | Plano da subconsulta (2.450 execuções) | Tempo total |
+|---|---|---|
+| conta demo sozinha (24 sessões) | `Seq Scan` + `Sort` em cada execução | 5,9 ms |
+| 200 alunos, logo depois da carga | `Index Only Scan Backward`, `Heap Fetches: 1001` | 2,1 ms |
+| 200 alunos, depois de `VACUUM` | `Index Only Scan Backward`, `Heap Fetches: 0` | 2,3 ms |
+
+Três lições num quadro:
+- **Tabela minúscula = Seq Scan, e está certo.** Com 24 linhas, ler tudo e ordenar custa menos
+  que descer num índice. O planejador decide pelo custo estimado, não por existir índice.
+- **`Backward` + `LIMIT 1`:** o índice já está em ordem de `terminada_em`; o Postgres lê de
+  trás para frente e para na primeira entrada que passa no filtro. Não há ordenação.
+- **`INCLUDE (metodo)` só dá Index Only Scan de verdade com o mapa de visibilidade em dia.**
+  Logo depois da carga, 1.001 buscas ainda foram à tabela conferir se a linha era visível;
+  depois do `VACUUM`, nenhuma (a mesma lição da seção 9, com `INCLUDE (nota)`). O tempo não
+  mudou aqui porque tudo estava em memória; num banco maior que a RAM, cada *heap fetch* é
+  uma leitura de disco.
+
+`tests/test_analytics_foco.py` confere o plano (`EXPLAIN` contém `Index Only Scan Backward
+using ix_sessoes_estudo_usuario_terminada_em`), com `SET LOCAL enable_seqscan = off` só para a
+tabela minúscula do teste não ganhar no custo.
+
+**Leitura honesta do resultado.** É correlação, não causa: se você só faz pomodoro quando está
+descansado, o pomodoro "ganha" por isso. E grupos com poucas respostas oscilam muito: a rota
+devolve o `n` de cada grupo, e o painel esmaece as barras com menos de 20 respostas. No seed, as
+notas são sorteadas sem depender da sessão, e o gráfico mostra exatamente isso: taxas parecidas
+(66% a 72%) em todos os grupos.
+
+### Testes com dados controlados
+
+| Teste | Dado montado | Resultado esperado |
+|---|---|---|
+| dia local | sessão às 23h30 em São Paulo (02h30 UTC do dia seguinte) | conta no dia de São Paulo |
+| foco efetivo | 30 min, 5 de pausa, 60 s fora | 24 min |
+| semana ISO | quarta, domingo, segunda | as 2 primeiras na mesma semana |
+| ROLLUP | 3 pomodoros (1 abandonado) + 1 52/17 abandonado | pomodoro 66,67%; bloco 0 sessões, taxa nula; todos = 4 |
+| janela | respostas a 5, 55 e 65 min do fim | as duas primeiras contam, a terceira vai para "sem sessão" |
+| durante | resposta no meio de uma sessão de 52 min | "sem sessão" (ainda não tinha terminado) |
+| última sessão | duas sessões antes da resposta | vale a que terminou por último |

@@ -623,3 +623,56 @@ NOT NULL, chave uuid NOT NULL, minutos int NOT NULL);`
 ```sql
 
 ```
+
+### 7.2 Colunas geradas e o que não cabe nelas
+
+- (a) `\d+ sessoes_estudo`: como o `psql` mostra `duracao_planejada_s` e `duracao_real_s`?
+  Tente `UPDATE sessoes_estudo SET duracao_real_s = 0 WHERE id = ...` (dentro de `BEGIN;
+  ... ROLLBACK;`). Qual é o erro?
+- (b) Por que `foco_efetivo_s` **não** pode ser uma coluna gerada? (Dica: de onde vêm as
+  pausas.) Que alternativas existiriam (view, trigger, coluna gravada pelo app) e que
+  risco cada uma traz?
+- (c) Compare `SELECT GREATEST(NULL, 0)` com `SELECT NULL > 0`. Por que a view usa
+  `CASE WHEN duracao_real_s IS NOT NULL THEN GREATEST(...) END`, e o que `avg()` faz com
+  `NULL` e com `0`?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 7.3 `ON CONFLICT`, `xmax` e o snapshot do comando
+
+- (a) Num `INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING (xmax = 0)`, o que `xmax`
+  vale numa linha recém-inserida e numa linha atualizada? Prove com duas execuções.
+- (b) Abra **duas** sessões do `psql`. Na 1ª: `BEGIN;` e insira uma sessão com uma chave
+  fixa (sem `COMMIT`). Na 2ª: o mesmo `INSERT ... ON CONFLICT ... DO UPDATE ... WHERE` com
+  o `UNION ALL SELECT` de reserva de `SQL_SESSAO`. O que a 2ª faz enquanto a 1ª não
+  confirma? Dê `COMMIT` na 1ª: o que a 2ª devolve? Por que um **novo** `SELECT` na 2ª acha
+  a linha?
+- (c) Em que nível de isolamento a releitura num comando novo NÃO resolveria (dica:
+  `REPEATABLE READ`)?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 7.4 `LATERAL` top-1 e o plano
+
+- (a) Reescreva a consulta do acerto depois de cada método **sem** `LATERAL` (dica: janela
+  `row_number() OVER (PARTITION BY ... ORDER BY terminada_em DESC)` sobre um JOIN por
+  intervalo). Compare os dois `EXPLAIN ANALYZE` com o seed de 200 alunos.
+- (b) Apague o índice `ix_sessoes_estudo_usuario_terminada_em` (dentro de `BEGIN; ...
+  ROLLBACK;`) e rode o `EXPLAIN` de novo. Que plano aparece e quantas linhas cada
+  execução da subconsulta lê?
+- (c) Por que o índice é **parcial** (`WHERE terminada_em IS NOT NULL`)? A consulta precisa
+  repetir essa condição para o planejador poder usá-lo?
+
+**Minha resposta:**
+
+```sql
+
+```

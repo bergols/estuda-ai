@@ -39,8 +39,8 @@ do autor (`docs/deploy.md`, seção 4). **Hoje, provisoriamente**, a API roda no
 Oracle sair (script `deploy/oracle-criar-vm.sh`). Roadmap no `README.md`.
 
 **Fase 7** (app desktop, sessões de estudo, Spotify, modo foco) em 4 sessões, plano aprovado:
-(1) app Tauri + login + instaladores **concluída**; (2) sessões de estudo, SQLite offline
-com chaves de idempotência, analytics; (3) Spotify (PKCE, refresh token cifrado na
+(1) app Tauri + login + instaladores e (2) sessões de estudo, SQLite offline com chaves de
+idempotência, analytics de foco **concluídas**; (3) Spotify (PKCE, refresh token cifrado na
 aplicação com AES-GCM, não pgcrypto); (4) bloqueio de programas e de sites (hosts, com
 restauração garantida) e saída de emergência. Decisões já tomadas pelo autor: o desktop
 fala com o **BFF da Vercel** (não direto com a API); a sessão de estudo roda só no desktop
@@ -70,7 +70,7 @@ npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --p
 npm --prefix frontend run build:desktop                   # exportação estática (alvo desktop) em frontend/out
 ESTUDA_AI_URL=http://localhost:3000 npm --prefix desktop run dev   # app desktop contra o BFF local
 cargo fmt --all --check --manifest-path desktop/Cargo.toml && cargo clippy --manifest-path desktop/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path desktop/Cargo.toml
-ESTUDA_AI_TESTE_SENHA=<SENHA_DEV> cargo test --manifest-path desktop/Cargo.toml -- --ignored   # fluxo real: BFF local + Keychain
+ESTUDA_AI_TESTE_SENHA=<SENHA_DEV> cargo test --manifest-path desktop/Cargo.toml -- --ignored --test-threads=1   # fluxo real: BFF local + Keychain + SQLite → Postgres
 npm --prefix desktop run build -- --target universal-apple-darwin   # .app/.dmg universal local (~4 min)
 ```
 
@@ -109,6 +109,17 @@ Armadilhas de ambiente já encontradas:
 - `git add caminho/que/foi/renomeado` falha ("did not match any files") e, num `&&`, o
   commit roda só com o que já estava no índice. Para renomeações, use
   `git commit -- <caminhos>` ou confira `git status` antes.
+- Depois de renomear rotas, o `next dev` pode guardar no `.next/` referência ao arquivo
+  antigo ("Could not parse module ... route.ts, file not found"): pare o servidor e apague
+  `frontend/.next` (é só cache).
+- Os testes `--ignored` do desktop usam o MESMO item do Keychain (o do localhost): rode com
+  `--test-threads=1`, senão um faz logout enquanto o outro está logado.
+- No Postgres, `GREATEST`/`LEAST` IGNORAM NULL (`GREATEST(NULL, 0)` = 0). Para "ainda não
+  se sabe" continuar NULL, use `CASE WHEN x IS NOT NULL THEN GREATEST(...) END`.
+- Para ver a tela do desktop no navegador do preview: rode `npm run dev:desktop` (3001) e
+  injete um `window.__TAURI_INTERNALS__` falso (`invoke`, `transformCallback`) e
+  `window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} }` antes de navegar
+  (pelo router do Next) até a tela.
 - Sem permissão de Acessibilidade não dá para digitar/clicar no app desktop por script.
   Para ver a janela: id via `CGWindowListCopyWindowInfo` (script Swift) e
   `screencapture -x -o -l <id>`; para testar o fluxo, o teste `--ignored` do `ponte.rs`.
@@ -269,6 +280,11 @@ Detalhes e o porquê em `docs/modo-foco.md`.
   permissão `allow-<comando>` na capability da janela que pode usá-lo (menor privilégio).
 - CSP restritiva em `tauri.conf.json` (sem `unsafe-inline` em script). Cliente HTTP do
   Rust não segue redirecionamentos (levariam o Bearer).
+- Sessões de estudo: motor do timer e regras da sessão são funções puras em
+  `frontend/src/lib/foco/` (recebem `agora`; testes com relógio falso). Toda mudança vai para
+  o SQLite (`nucleo::fila`) e um laço em `src-tauri/src/sincronia.rs` envia; o servidor é
+  idempotente (`backend/app/servicos/sessoes.py`: `ON CONFLICT`, `SAVEPOINT` por sessão,
+  releitura em comando novo). Campo novo na sessão: schema Pydantic + `SQL_SESSAO` + migration.
 - Instaladores: `.github/workflows/desktop.yml`, só por tag `desktop-v<versão do
   tauri.conf.json>` (Release em rascunho) ou "Run workflow". Não rode a cada push: minuto
   de macOS custa 10x na cota do repositório privado.
@@ -311,6 +327,10 @@ Detalhes em `docs/deploy.md`.
   de fora.
 - Testes de analytics montam dados controlados com resultado conhecido
   (`tests/test_analytics.py`) e chamam `analytics.atualizar_mv()` antes de ler a MV.
+- Fase 7: analytics de foco em `app/servicos/analytics_foco.py` (rotas `/analytics/foco/*`),
+  ao vivo sobre `vw_sessoes_foco`, com as mesmas convenções; filtre por `iniciada_em` crua,
+  nunca por `dia` da view. O seed `seed_revisoes` cria sessões com um RNG PRÓPRIO (não mude a
+  sequência do RNG principal: os números das docs das fases 4 e 5 saem dele).
 
 ## Repetição espaçada (fase 4)
 

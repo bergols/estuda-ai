@@ -451,8 +451,10 @@ estuda-ai/
 - [ ] **Fase 7: app desktop, sessões de estudo, Spotify e modo foco.**
   - [x] App Tauri v2 para Windows e macOS com as telas do frontend (exportação estática),
     login com token no cofre do sistema, instaladores pelo GitHub Actions.
-  - [ ] Sessões de estudo (pomodoro, bloco, 52/17), modo offline com SQLite e chaves de
-    idempotência, analytics de foco.
+  - [x] Sessões de estudo (pomodoro, bloco contínuo, 52/17, personalizado) com janela de
+    foco em tela cheia, modo offline com SQLite e chaves de idempotência (testado contra
+    envio simultâneo), analytics de foco (ROLLUP, LATERAL top-1 com Index Only Scan) e
+    gráficos no painel.
   - [ ] Spotify (OAuth com PKCE, refresh token cifrado, player por método/disciplina).
   - [ ] Modo foco: janela por cima de tudo, bloqueio de programas e de sites (hosts),
     saída de emergência.
