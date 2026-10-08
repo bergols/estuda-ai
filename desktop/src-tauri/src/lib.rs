@@ -5,6 +5,7 @@ mod cofre;
 mod janela;
 mod ponte;
 mod sincronia;
+mod spotify;
 
 use tauri::Manager;
 
@@ -13,6 +14,8 @@ pub fn run() {
     let estado = ponte::Estado::novo().expect("configuração do servidor inválida");
     tauri::Builder::default()
         .manage(estado)
+        .manage(spotify::Player::novo())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // Fila local (SQLite na pasta de dados do app) e o laço de envio
             let sincronia = sincronia::Sincronia::abrir(app.handle())?;
@@ -30,6 +33,11 @@ pub fn run() {
             sincronia::sincronizar_agora,
             janela::modo_foco,
             janela::sistema,
+            spotify::spotify_conectar,
+            spotify::spotify_tocar,
+            spotify::spotify_pausar,
+            spotify::spotify_retomar,
+            spotify::spotify_atual,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o estuda-ai");

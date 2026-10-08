@@ -25,7 +25,11 @@ keyring = "4"
 url = "2"
 # Laço de sincronização: espera com timeout e "acordar" (Notify)
 tokio = { version = "1", features = ["sync", "time"] }
+tauri-plugin-opener = "2"
+gethostname = "1"
+getrandom = "0.3"
 
 [dev-dependencies]
+mockito = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 uuid = { version = "1", features = ["v4"] }

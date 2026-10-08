@@ -13,6 +13,11 @@
     "allow-situacao-sincronia",
     "allow-sincronizar-agora",
     "allow-modo-foco",
-    "allow-sistema"
+    "allow-sistema",
+    "allow-spotify-conectar",
+    "allow-spotify-tocar",
+    "allow-spotify-pausar",
+    "allow-spotify-retomar",
+    "allow-spotify-atual"
   ]
 }

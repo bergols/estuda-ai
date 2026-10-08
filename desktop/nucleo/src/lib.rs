@@ -4,3 +4,5 @@
 pub mod api;
 
 pub mod fila;
+
+pub mod spotify;

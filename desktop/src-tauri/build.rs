@@ -13,6 +13,11 @@ const COMANDOS: &[&str] = &[
     "sincronizar_agora",
     "modo_foco",
     "sistema",
+    "spotify_conectar",
+    "spotify_tocar",
+    "spotify_pausar",
+    "spotify_retomar",
+    "spotify_atual",
 ];
 
 fn main() {
