@@ -40,8 +40,13 @@ impl Estado {
         } else {
             None
         };
+        // Vazia conta como não definida (no CI, uma variável de repositório ausente
+        // chega como "" e não pode virar uma URL inválida dentro do instalador)
         let endereco = em_tempo_de_execucao
-            .or(option_env!("ESTUDA_AI_URL").map(str::to_owned))
+            .filter(|s| !s.is_empty())
+            .or(option_env!("ESTUDA_AI_URL")
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned))
             .unwrap_or_else(|| URL_PADRAO.to_owned());
         Self::com_endereco(&endereco)
     }

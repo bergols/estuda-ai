@@ -1,6 +1,9 @@
 # Integração contínua: roda a cada push e pull request.
 #   backend   -> lint (ruff) + migrations + alembic check + testes contra Postgres+pgvector
 #   frontend  -> tipos gerados do OpenAPI em dia, lint, typecheck, testes e build do Next.js
+#                (web e exportação estática do app desktop)
+#   desktop   -> formatação, clippy e testes do núcleo Rust do app desktop (Linux, barato;
+#                os instaladores de Windows/macOS ficam no desktop.yml, sob demanda)
 #   segredos  -> gitleaks no histórico INTEIRO do git (não só no último commit)
 name: CI
 
@@ -133,6 +136,41 @@ jobs:
         env:
           BACKEND_URL: http://localhost:8000
           NEXT_TELEMETRY_DISABLED: "1"
+
+      # A exportação estática recusa o que precisa de servidor (rota dinâmica, proxy,
+      # PPR): quebrar o alvo desktop sem perceber é fácil, e aqui custa segundos.
+      - name: Build do alvo desktop (exportação estática)
+        run: npm run build:desktop
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop -> target
+
+      # Só o crate "nucleo": regras puras, sem Tauri. O app em si (src-tauri) precisaria
+      # do WebKit do Linux para compilar; ele é testado no desktop.yml, em Windows e macOS.
+      - name: Formatação
+        run: cargo fmt --all --check
+
+      - name: Clippy (avisos viram erro)
+        run: cargo clippy -p nucleo --all-targets -- -D warnings
+
+      - name: Testes do núcleo
+        run: cargo test -p nucleo
 
   segredos:
     runs-on: ubuntu-24.04
