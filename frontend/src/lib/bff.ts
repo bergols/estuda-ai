@@ -43,6 +43,31 @@ export function origemConfiavel(metodo: string, secFetchSite: string | null): bo
 }
 
 /**
+ * Token enviado pelo app desktop em "Authorization: Bearer <token>", ou null.
+ *
+ * Por que o Bearer dispensa a checagem de origem (CSRF)? CSRF existe porque o navegador
+ * anexa o COOKIE sozinho a qualquer requisição para cá, até as disparadas por outro
+ * site. Um cabeçalho Authorization ninguém anexa por você: só quem já tem o token
+ * consegue mandá-lo, e um site alheio que tentasse (fetch com Authorization) cairia no
+ * preflight de CORS, que este BFF não autoriza.
+ */
+export function tokenBearer(authorization: string | null): string | null {
+  const [esquema, token, ...resto] = (authorization ?? "").trim().split(/\s+/);
+  if (esquema?.toLowerCase() !== "bearer" || !token || resto.length > 0) return null;
+  return token;
+}
+
+/**
+ * Login que devolve o token no corpo é só para clientes nativos (o app desktop guarda
+ * no cofre do sistema). Navegadores mandam Sec-Fetch-Site em todo fetch: com ele, a
+ * rota recusa. Assim um script injetado numa página web (XSS) não consegue usar esta
+ * rota para obter um token que o cookie httpOnly esconderia.
+ */
+export function clienteNativo(secFetchSite: string | null): boolean {
+  return secFetchSite === null;
+}
+
+/**
  * IP do cliente a partir de X-Forwarded-For ("cliente, proxy1, proxy2"): o 1o é o
  * cliente, escrito pela plataforma de hospedagem na borda. A API ainda valida o
  * formato e só confia nele com o segredo do BFF.

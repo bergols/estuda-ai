@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { caminhoDaApi, caminhoPermitido, ipDoCliente, origemConfiavel } from "./bff";
+import { caminhoDaApi, caminhoPermitido, clienteNativo, ipDoCliente, origemConfiavel, tokenBearer } from "./bff";
 
 describe("allowlist do repasse /api/<caminho>", () => {
   it.each([
@@ -72,5 +72,30 @@ describe("IP do cliente", () => {
   it("sem header não inventa IP", () => {
     expect(ipDoCliente(null)).toBeNull();
     expect(ipDoCliente("")).toBeNull();
+  });
+});
+
+describe("Bearer do app desktop", () => {
+  it("extrai o token de 'Bearer <token>' (esquema sem diferenciar maiúsculas)", () => {
+    expect(tokenBearer("Bearer abc.def.ghi")).toBe("abc.def.ghi");
+    expect(tokenBearer("bearer abc")).toBe("abc");
+    expect(tokenBearer("  Bearer   abc  ")).toBe("abc");
+  });
+
+  it.each([null, "", "Bearer", "Bearer ", "Basic dXNlcjpzZW5oYQ==", "Bearer a b", "Token abc"])(
+    "%j não é um Bearer válido",
+    (valor) => {
+      expect(tokenBearer(valor)).toBeNull();
+    },
+  );
+});
+
+describe("login que devolve token (só cliente nativo)", () => {
+  it("sem Sec-Fetch-Site (app desktop, curl) é cliente nativo", () => {
+    expect(clienteNativo(null)).toBe(true);
+  });
+
+  it.each(["same-origin", "same-site", "cross-site", "none"])("navegador (Sec-Fetch-Site=%s) é recusado", (site) => {
+    expect(clienteNativo(site)).toBe(false);
   });
 });

@@ -1,43 +1,16 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import {
-  COOKIE_SESSAO,
-  cabecalhosDoBff,
-  chamarApi,
-  opcoesDoCookie,
-  origemConfiavel,
-} from "@/lib/sessao";
+import { COOKIE_SESSAO, erroDaApi, loginNaApi, opcoesDoCookie, origemConfiavel } from "@/lib/sessao";
 
 /** Login: troca e-mail e senha por um cookie httpOnly com o JWT. */
 export async function POST(request: Request) {
   if (!origemConfiavel(request)) {
     return NextResponse.json({ detail: "origem não permitida" }, { status: 403 });
   }
-  const { email, senha } = (await request.json().catch(() => ({}))) as {
-    email?: unknown;
-    senha?: unknown;
-  };
-  if (typeof email !== "string" || typeof senha !== "string") {
-    return NextResponse.json({ detail: "informe e-mail e senha" }, { status: 422 });
-  }
-
-  // A API espera o formulário do fluxo "password" do OAuth2 (username/password).
-  const resposta = await chamarApi("auth/login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      ...cabecalhosDoBff(request),
-    },
-    body: new URLSearchParams({ username: email, password: senha }),
-  });
-  const corpo = await resposta.json().catch(() => ({ detail: "erro na API" }));
-  if (!resposta.ok) {
-    const cabecalhos: Record<string, string> = {};
-    const retry = resposta.headers.get("retry-after");
-    if (retry) cabecalhos["Retry-After"] = retry;
-    return NextResponse.json({ detail: corpo.detail }, { status: resposta.status, headers: cabecalhos });
-  }
+  const resposta = await loginNaApi(request);
+  if (!resposta.ok) return erroDaApi(resposta);
+  const corpo = await resposta.json();
 
   (await cookies()).set(
     COOKIE_SESSAO,

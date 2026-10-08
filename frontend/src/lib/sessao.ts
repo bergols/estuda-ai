@@ -65,6 +65,37 @@ export function cabecalhosDoBff(request: Request): Record<string, string> {
   return cabecalhos;
 }
 
+/**
+ * Login na API (fluxo "password" do OAuth2: formulário username/password). Usado pelo
+ * /api/sessao (web, grava cookie) e pelo /api/token (desktop, devolve o token).
+ */
+export async function loginNaApi(request: Request): Promise<Response> {
+  const { email, senha } = (await request.json().catch(() => ({}))) as {
+    email?: unknown;
+    senha?: unknown;
+  };
+  if (typeof email !== "string" || typeof senha !== "string") {
+    return Response.json({ detail: "informe e-mail e senha" }, { status: 422 });
+  }
+  return chamarApi("auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...cabecalhosDoBff(request),
+    },
+    body: new URLSearchParams({ username: email, password: senha }),
+  });
+}
+
+/** Erro da API repassado só com a mensagem e o Retry-After (429 do rate limit). */
+export async function erroDaApi(resposta: Response): Promise<Response> {
+  const corpo = await resposta.json().catch(() => ({ detail: "erro na API" }));
+  const cabecalhos: Record<string, string> = {};
+  const retry = resposta.headers.get("retry-after");
+  if (retry) cabecalhos["Retry-After"] = retry;
+  return Response.json({ detail: corpo.detail }, { status: resposta.status, headers: cabecalhos });
+}
+
 export function opcoesDoCookie(expiraEm: Date) {
   return {
     httpOnly: true, // invisível para o JavaScript da página

@@ -1,12 +1,13 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { caminhoDaApi, caminhoPermitido } from "@/lib/bff";
+import { caminhoDaApi, caminhoPermitido, tokenBearer } from "@/lib/bff";
 import { COOKIE_SESSAO, cabecalhosDoBff, chamarApi, origemConfiavel } from "@/lib/sessao";
 
 /**
- * Repassa /api/<caminho> para a API, com o JWT do cookie em "Authorization".
- * Regras (allowlist, CSRF, IP) em lib/bff.ts, com testes em lib/bff.test.ts.
+ * Repassa /api/<caminho> para a API, com o JWT em "Authorization": o do cookie (web)
+ * ou o que o app desktop mandou como Bearer. Regras (allowlist, CSRF, IP) em
+ * lib/bff.ts, com testes em lib/bff.test.ts.
  */
 
 // Gerações com IA levam dezenas de segundos. Na Vercel (plano Hobby com Fluid compute)
@@ -18,10 +19,13 @@ async function repassar(request: NextRequest, ctx: RouteContext<"/api/[...caminh
   if (!caminhoPermitido(caminho)) {
     return NextResponse.json({ detail: "não encontrado" }, { status: 404 });
   }
-  if (!origemConfiavel(request)) {
+  // App desktop: o token vem no cabeçalho, e a checagem de origem não se aplica (ver
+  // tokenBearer em lib/bff.ts). Web: o token vem do cookie, e a checagem é obrigatória.
+  const bearer = tokenBearer(request.headers.get("authorization"));
+  if (!bearer && !origemConfiavel(request)) {
     return NextResponse.json({ detail: "origem não permitida" }, { status: 403 });
   }
-  const token = (await cookies()).get(COOKIE_SESSAO)?.value;
+  const token = bearer ?? (await cookies()).get(COOKIE_SESSAO)?.value;
   if (!token) {
     return NextResponse.json({ detail: "sessão expirada" }, { status: 401 });
   }
@@ -55,7 +59,7 @@ async function repassar(request: NextRequest, ctx: RouteContext<"/api/[...caminh
   }
   const resultado = new NextResponse(resposta.body, { status: resposta.status, headers: saida });
   // Token expirado ou revogado ("sair de todos"): o cookie não serve mais.
-  if (resposta.status === 401) resultado.cookies.delete(COOKIE_SESSAO);
+  if (resposta.status === 401 && !bearer) resultado.cookies.delete(COOKIE_SESSAO);
   return resultado;
 }
 
