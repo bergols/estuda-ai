@@ -39,7 +39,10 @@ export async function chamarApi(caminho: string, init: RequestInit): Promise<Res
   }
   try {
     return await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(120_000) });
-  } catch {
+  } catch (erro) {
+    // Só no log do servidor (na Vercel: Logs do projeto), nunca na resposta ao navegador
+    const causa = erro instanceof Error ? (erro.cause ?? erro) : erro;
+    console.error(`BFF: falha ao chamar ${url.origin}:`, causa);
     return Response.json(
       { detail: "o servidor da API está fora do ar no momento; tente de novo mais tarde" },
       { status: 503 },
