@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import select, text
-from sqlalchemy.exc import DataError, DBAPIError, IntegrityError
+from sqlalchemy.exc import DataError, DBAPIError, IntegrityError, ProgrammingError
 
 from app.models import (
     Alternativa,
@@ -264,9 +264,36 @@ def test_historico_de_revisoes_e_imutavel(session, disciplina):
     session.add(h)
     session.flush()
 
-    with pytest.raises(DBAPIError, match="imutável"):
+    # 1ª camada: o papel da API nem tem o privilégio de UPDATE.
+    with pytest.raises(ProgrammingError, match="permission denied"):
         with session.begin_nested():
             session.execute(text("UPDATE historico_revisoes SET nota = 5 WHERE id = :id"), {"id": h.id})
+
+
+def test_historico_e_imutavel_ate_para_o_dono(session_dono):
+    """2ª camada: o trigger vale para qualquer papel, inclusive o dono (que tem todos os
+    privilégios). Defesa em profundidade: um script de admin errado também é barrado."""
+    u = Usuario(nome="Dono", email="dono@furg.br")
+    session_dono.add(u)
+    session_dono.flush()
+    d = Disciplina(usuario_id=u.id, nome="BD")
+    session_dono.add(d)
+    session_dono.flush()
+    card = _card(session_dono, d)
+    session_dono.add(HistoricoRevisao(
+        flashcard_id=card.id, nota=4, facilidade_anterior=Decimal("2.50"),
+        facilidade_nova=Decimal("2.50"), intervalo_anterior=0, intervalo_novo=1,
+        repeticoes_anterior=0, repeticoes_nova=1,
+        proxima_revisao_anterior=datetime(2026, 10, 1, tzinfo=UTC),
+        proxima_revisao_nova=datetime(2026, 10, 2, tzinfo=UTC),
+        revisado_em=datetime(2026, 10, 1, tzinfo=UTC),
+    ))
+    session_dono.flush()
+
+    with pytest.raises(DBAPIError, match="imutável"):
+        with session_dono.begin_nested():
+            session_dono.execute(text("UPDATE historico_revisoes SET nota = 5 WHERE flashcard_id = :id"),
+                                 {"id": card.id})
 
 
 def test_apagar_card_apaga_estado_e_historico(session, disciplina):

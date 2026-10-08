@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import text
@@ -11,10 +12,11 @@ def gerar_linha(session, usuario, disciplina_id, quando, custo, tokens=(100, 10)
         modelo="claude-haiku-4-5-20251001", tokens_entrada=tokens[0], tokens_saida=tokens[1],
         custo_usd=custo, duracao_ms=10, status=status,
         erro_mensagem=None if status == "sucesso" else "falhou",
+        # criado_em já no INSERT: geracoes é só-INSERT e o papel da API não tem UPDATE nela
+        criado_em=datetime.fromisoformat(quando),
     )
     session.add(g)
     session.flush()
-    session.execute(text("UPDATE geracoes SET criado_em = :q WHERE id = :id"), {"q": quando, "id": g.id})
 
 
 def test_gasto_por_disciplina_e_mes(client, headers, usuario, session):

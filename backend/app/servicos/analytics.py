@@ -16,7 +16,6 @@ estão em docs/analytics.md. Convenções:
 """
 
 import re
-import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -566,17 +565,15 @@ class Atualizacao:
 def atualizar_mv(session: Session) -> Atualizacao:
     """REFRESH ... CONCURRENTLY: recalcula e aplica só as diferenças, sem bloquear quem
     está lendo a MV (o refresh comum bloquearia até as leituras). Exige o índice
-    único uq_mv_respostas_diarias."""
-    inicio = time.perf_counter()
-    session.execute(text(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {MV}"))
-    duracao = int((time.perf_counter() - inicio) * 1000)
-    quando = session.execute(
-        text("""UPDATE atualizacoes_mv SET atualizado_em = now(), duracao_ms = :d
-                WHERE nome = :nome RETURNING atualizado_em"""),
-        {"d": duracao, "nome": MV},
-    ).scalar_one()
+    único uq_mv_respostas_diarias.
+
+    O papel da aplicação não é dono da MV e não pode dar REFRESH (no Postgres 16 só o
+    dono pode). Ele chama atualizar_mv_respostas_diarias(), uma função SECURITY
+    DEFINER que roda com os privilégios do dono (migration papel_app_menor_privilegio).
+    """
+    linha = session.execute(text("SELECT * FROM atualizar_mv_respostas_diarias()")).one()
     session.commit()
-    return Atualizacao(quando, duracao)
+    return Atualizacao(linha.atualizado_em, linha.duracao_ms)
 
 
 def periodo_padrao(hoje: date, dias: int) -> tuple[date, date]:

@@ -49,7 +49,8 @@ services:
       - modelos:/modelos
       # docs/ montada para scripts/experimento_hnsw.py gravar os resultados no repositório
       - ./docs:/docs
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    # Migrations (como dono) -> login/senha do papel da app -> API (como estuda_ai_app)
+    command: sh -c "alembic upgrade head && python -m scripts.papel_app && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:
   pgdata:

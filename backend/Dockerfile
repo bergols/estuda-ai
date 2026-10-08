@@ -23,4 +23,4 @@ EXPOSE 8000
 
 # Aplica as migrations antes de subir a API: o schema do banco sempre
 # acompanha a versão do código.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python -m scripts.papel_app && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

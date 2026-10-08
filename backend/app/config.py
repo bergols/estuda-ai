@@ -10,8 +10,10 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
 
+    # A API conecta com o papel de MENOR privilégio (estuda_ai_app: só dados).
     database_url: str
-    test_database_url: str | None = None
+    # Migrations e scripts de admin conectam com o DONO do schema (DDL).
+    migration_database_url: str | None = None
 
     upload_dir: Path = Path("/data/uploads")
     max_upload_mb: int = 20

@@ -301,11 +301,9 @@ def test_custos_por_mes_e_tipo_com_acumulados(session, usuario, disciplina):
     def gerar(tipo, quando, custo):
         g = Geracao(usuario_id=usuario.id, disciplina_id=disciplina.id, tipo=tipo,
                     modelo="claude-haiku-4-5-20251001", custo_usd=Decimal(custo),
-                    duracao_ms=1, status="sucesso")
+                    duracao_ms=1, status="sucesso", criado_em=quando)  # só-INSERT: sem UPDATE
         session.add(g)
         session.flush()
-        session.execute(text("UPDATE geracoes SET criado_em = :q WHERE id = :id"),
-                        {"q": quando, "id": g.id})
 
     gerar("flashcards", brt(2026, 8, 10), "0.10")
     gerar("pergunta", brt(2026, 8, 20), "0.02")

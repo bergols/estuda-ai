@@ -48,7 +48,11 @@ COMUNS = "o a de que em um uma para com por os as do da no na se mais como mas".
 
 
 def url_psycopg() -> str:
-    return get_settings().database_url.replace("postgresql+psycopg://", "postgresql://")
+    """Scripts de seed e experimento são de ADMIN (criam e apagam índices, VACUUM,
+    REFRESH): conectam como dono do schema, não com o papel da aplicação."""
+    settings = get_settings()
+    url = settings.migration_database_url or settings.database_url
+    return url.replace("postgresql+psycopg://", "postgresql://")
 
 
 def gerar_vetores(n: int, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:

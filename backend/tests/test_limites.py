@@ -76,11 +76,9 @@ def test_rate_limit_por_minuto_nas_rotas_de_ia(client, headers, disciplina_id, s
 def gerar(session, usuario, disciplina_id, quando: datetime):
     g = Geracao(usuario_id=usuario.id, disciplina_id=disciplina_id, tipo="pergunta",
                 modelo="claude-haiku-4-5-20251001", custo_usd=Decimal("0.01"),
-                duracao_ms=1, status="sucesso")
+                duracao_ms=1, status="sucesso", criado_em=quando)  # só-INSERT: sem UPDATE
     session.add(g)
     session.flush()
-    session.execute(text("UPDATE geracoes SET criado_em = :q WHERE id = :id"),
-                    {"q": quando, "id": g.id})
 
 
 def test_cota_diaria_bloqueia_antes_de_chamar_o_llm(client, headers, session, usuario,

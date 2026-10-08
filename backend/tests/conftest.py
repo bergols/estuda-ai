@@ -7,6 +7,11 @@ Postgres. Testar num banco diferente do de produção esconde bugs.
 Isolamento: cada teste roda dentro de uma transação que é desfeita (ROLLBACK)
 no final, então os testes não enxergam os dados uns dos outros e o banco
 volta limpo, sem precisar de TRUNCATE.
+
+Dois papéis, como em produção: as migrations rodam como DONO (estuda_ai) e os
+testes conectam como estuda_ai_app, o papel de menor privilégio da API. Assim um
+teste que dependesse de um privilégio que a API não tem falharia aqui, e não só
+depois do deploy. `engine_dono` existe para os poucos testes de administração.
 """
 
 from contextlib import contextmanager
@@ -32,21 +37,26 @@ from app.servicos.llm import ClienteLLM
 from tests.fakes import AnthropicFalso, EmbedderFalso
 
 MODELO_TESTE = "claude-haiku-4-5-20251001"
+PAPEL_APP = "estuda_ai_app"
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 
-def _url_banco_teste():
-    settings = get_settings()
-    if settings.test_database_url:
-        return make_url(settings.test_database_url)
-    url = make_url(settings.database_url)
+def _no_banco_de_teste(url: str):
+    url = make_url(url)
     return url.set(database=f"{url.database}_test")
 
 
+def urls_teste():
+    """(papel da aplicação, dono), ambos apontando para <banco>_test."""
+    settings = get_settings()
+    dono = settings.migration_database_url or settings.database_url
+    return _no_banco_de_teste(settings.database_url), _no_banco_de_teste(dono)
+
+
 @pytest.fixture(scope="session")
-def engine():
-    url = _url_banco_teste()
+def engine_dono():
+    _, url = urls_teste()
 
     # CREATE DATABASE não pode rodar dentro de uma transação, daí o AUTOCOMMIT.
     # Conectamos ao banco "postgres" (sempre existe) para criar o de teste.
@@ -59,7 +69,7 @@ def engine():
             conn.execute(text(f'CREATE DATABASE "{url.database}"'))
     admin.dispose()
 
-    # O schema de teste é criado pela MESMA migration da produção.
+    # O schema de teste é criado pela MESMA migration da produção, como dono.
     # downgrade -> upgrade garante um banco limpo e testa os dois sentidos.
     cfg = Config(BACKEND_DIR / "alembic.ini")
     cfg.attributes["url"] = url.render_as_string(hide_password=False)
@@ -71,8 +81,41 @@ def engine():
     engine.dispose()
 
 
+@pytest.fixture(scope="session")
+def engine(engine_dono):
+    """Conexões da API nos testes: papel estuda_ai_app (sem DDL, sem DELETE no histórico)."""
+    url_app, _ = urls_teste()
+    if url_app.username != PAPEL_APP:
+        pytest.exit(f"DATABASE_URL deveria usar o papel {PAPEL_APP}; veja o .env.example")
+    # Papéis valem para o servidor inteiro: a senha é a mesma do banco de desenvolvimento.
+    # Aplicada aqui também para os testes não dependerem de o compose ter rodado papel_app.
+    with engine_dono.connect() as conn:
+        conn.execute(
+            text(f"ALTER ROLE {PAPEL_APP} LOGIN PASSWORD " + _literal(conn, url_app.password))
+        )
+        conn.commit()
+    engine = create_engine(url_app)
+    yield engine
+    engine.dispose()
+
+
+def _literal(conn, valor: str) -> str:
+    """ALTER ROLE não aceita bind parameter; quote_literal() escapa no próprio Postgres."""
+    return conn.scalar(text("SELECT quote_literal(:v)"), {"v": valor})
+
+
 @pytest.fixture
 def session(engine):
+    yield from _sessao_desfeita(engine)
+
+
+@pytest.fixture
+def session_dono(engine_dono):
+    """Sessão como DONO do schema, também desfeita no fim. Só para testes de admin."""
+    yield from _sessao_desfeita(engine_dono)
+
+
+def _sessao_desfeita(engine):
     with engine.connect() as conn:
         transacao = conn.begin()
         # create_savepoint: cada session.commit() da aplicação vira um

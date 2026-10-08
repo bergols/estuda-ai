@@ -17,8 +17,11 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    # Os testes passam a URL do banco de teste via config; no resto, usa DATABASE_URL.
-    return config.attributes.get("url") or get_settings().database_url
+    # Migrations rodam como DONO do schema (MIGRATION_DATABASE_URL), nunca com o papel
+    # da aplicação, que não pode criar nem alterar tabelas. Os testes passam a URL do
+    # banco de teste via config.attributes.
+    settings = get_settings()
+    return config.attributes.get("url") or settings.migration_database_url or settings.database_url
 
 
 def run_migrations_offline() -> None:

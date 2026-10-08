@@ -23,8 +23,11 @@ from app.servicos.sm2 import EstadoSM2, calcular, proxima_revisao
 
 
 @pytest.fixture
-def card(engine):
-    """Usuário + disciplina + card commitados; apagados no fim (cascata)."""
+def card(engine, engine_dono):
+    """Usuário + disciplina + card commitados; apagados no fim (cascata).
+
+    A limpeza usa o DONO: o papel da API não pode apagar usuários (não há rota para
+    isso) e é a cascata a partir de usuarios que leva o histórico junto."""
     with Session(engine) as s:
         usuario_id = s.execute(
             text("INSERT INTO usuarios (nome, email) VALUES ('Concorrência', :e) RETURNING id"),
@@ -41,7 +44,7 @@ def card(engine):
         ).scalar_one()
         s.commit()
     yield usuario_id, flashcard_id
-    with Session(engine) as s:
+    with Session(engine_dono) as s:
         s.execute(text("DELETE FROM usuarios WHERE id = :u"), {"u": usuario_id})
         s.commit()
 
