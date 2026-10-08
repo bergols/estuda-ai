@@ -13,8 +13,6 @@ dependencies = [
     "pydantic-settings>=2.3",
     "pgvector>=0.3",
     "pymupdf>=1.24",
-    "sentence-transformers>=3.0",
-    "torch>=2.4",
     "python-multipart>=0.0.9",
     "anthropic>=1.0",
     "argon2-cffi>=23.1",
@@ -25,6 +23,15 @@ dependencies = [
 dev = [
     "httpx2>=2.13.1",
     "pytest>=8",
+    "numpy>=1.26",  # seeds e experimentos (scripts/)
+    "ruff>=0.6",
+]
+# O modelo de embeddings (torch + sentence-transformers, ~1 GB instalado) fica num
+# grupo à parte: a API importa sentence_transformers só ao carregar o modelo, e os
+# testes usam o EmbedderFalso. O CI instala sem ele (`uv sync --no-group modelo`).
+modelo = [
+    "sentence-transformers>=3.0",
+    "torch>=2.4",
 ]
 
 [tool.pytest.ini_options]
@@ -38,8 +45,17 @@ filterwarnings = [
     "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
 ]
 
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# F: pyflakes (import sem uso, nome indefinido...); E9: erros de sintaxe/IO.
+select = ["F", "E9"]
+
 [tool.uv]
 package = false
+# `uv sync` instala estes grupos por padrão (desenvolvimento e a imagem Docker).
+default-groups = ["dev", "modelo"]
 
 # No Linux (container), o torch do PyPI pode trazer bibliotecas CUDA (GBs).
 # Este índice oficial do PyTorch só tem builds para CPU; no macOS vale o PyPI.

@@ -1,0 +1,20 @@
+# Configuração do gitleaks (varredura de segredos no histórico inteiro do git).
+# Usa as regras padrão e só abre exceção para FALSOS POSITIVOS conhecidos.
+#
+# Toda exceção aqui precisa ser estreita (arquivo + formato da linha), senão ela
+# esconde um vazamento de verdade. Rode localmente:
+#   docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git --redact /repo
+
+minVersion = "v8.30.0"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+# Sem "paths": numa lista global, "paths" faz o gitleaks pular o ARQUIVO inteiro
+# (testado na v8.30.1, mesmo com condition = "AND"), o que esconderia uma chave de
+# verdade num doc. A exceção olha a LINHA inteira: só passa uma linha que é
+# exatamente um rótulo de EXPLAIN seguido de nomes de coluna (tabela.coluna, ...).
+description = "Planos do EXPLAIN nos docs ('Group Key: r.dia' parece 'chave: valor')"
+regexTarget = "line"
+regexes = ['''^\s*(Sort|Group|Presorted|Hash|Merge|Index) Key: [a-z_][a-z0-9_.]*(, [a-z_][a-z0-9_.]*)*\s*$''']

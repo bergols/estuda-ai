@@ -1,0 +1,102 @@
+# Integração contínua: roda a cada push e pull request.
+#   backend   -> lint (ruff) + migrations + alembic check + testes contra Postgres+pgvector
+#   segredos  -> gitleaks no histórico INTEIRO do git (não só no último commit)
+# O job do frontend (build do Next.js) entra junto com o frontend.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# O token do GitHub só precisa ler o repositório (menor privilégio também aqui).
+permissions:
+  contents: read
+
+# Um push novo no mesmo branch cancela o CI anterior, que ficou obsoleto.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+
+    # Service container: um Postgres 16 com pgvector de verdade, igual ao do compose
+    # (os testes nunca usam SQLite). Vive só durante este job.
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: estuda_ai
+          # Senhas descartáveis: o banco nasce e morre dentro do job, sem dado real
+          POSTGRES_PASSWORD: dono-so-no-ci
+          POSTGRES_DB: estuda_ai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U estuda_ai -d estuda_ai"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      # Os mesmos dois papéis da produção: a API (e os testes) como estuda_ai_app,
+      # as migrations como dono.
+      DATABASE_URL: postgresql+psycopg://estuda_ai_app:app-so-no-ci@localhost:5432/estuda_ai
+      MIGRATION_DATABASE_URL: postgresql+psycopg://estuda_ai:dono-so-no-ci@localhost:5432/estuda_ai
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: JWT_SECRET aleatório (nunca um valor fixo no repositório)
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      # Sem o grupo "modelo" (torch + sentence-transformers, ~1 GB): os testes usam
+      # o EmbedderFalso. --frozen: falha se o uv.lock não bate com o pyproject.
+      - name: Dependências
+        run: uv sync --frozen --no-group modelo
+
+      - name: Lint
+        run: uv run --no-sync ruff check .
+
+      - name: Migrations (como dono) e papel da aplicação
+        run: |
+          uv run --no-sync alembic upgrade head
+          uv run --no-sync python -m scripts.papel_app
+
+      - name: Modelos e migrations em sincronia
+        run: uv run --no-sync alembic check
+
+      - name: Migrations nos dois sentidos (downgrade até a base e de volta)
+        run: |
+          uv run --no-sync alembic downgrade base
+          uv run --no-sync alembic upgrade head
+
+      - name: Testes
+        run: uv run --no-sync pytest
+
+  segredos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # histórico completo: um segredo apagado continua nos commits antigos
+
+      # Imagem oficial com versão FIXA (a "latest" mudaria as regras sem aviso).
+      # --user: o git dentro do container recusa repositórios de outro dono.
+      - name: gitleaks
+        run: >-
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo"
+          zricethezav/gitleaks:v8.30.1
+          git --redact --no-banner --config /repo/.gitleaks.toml /repo
