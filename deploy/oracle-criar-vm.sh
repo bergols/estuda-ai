@@ -28,6 +28,8 @@ PERFIL="${OCI_CLI_PROFILE:-DEFAULT}"
 SHAPE="VM.Standard.A1.Flex"
 SHAPE_CONFIG='{"ocpus": 1, "memoryInGBs": 4}' # Always Free: não aumente sem ler docs/deploy.md
 
+# A OCI CLI empacotada com Python 3.14 imprime SyntaxWarnings inofensivos a cada comando
+export PYTHONWARNINGS="ignore::SyntaxWarning"
 oci() { command oci --profile "$PERFIL" "$@"; }
 agora() { date "+%d/%m %H:%M:%S"; }
 avisar() {
@@ -39,6 +41,22 @@ avisar() {
 command -v oci > /dev/null || { echo "OCI CLI não encontrada: brew install oci-cli" >&2; exit 1; }
 [[ -f "$CHAVE_SSH" ]] || { echo "Chave SSH pública não encontrada: $CHAVE_SSH" >&2; exit 1; }
 [[ "$CHAVE_SSH" == *.pub ]] || { echo "Use a chave PÚBLICA (.pub), nunca a privada." >&2; exit 1; }
+
+# Chave de API recém-criada demora alguns minutos para chegar a todos os servidores da
+# Oracle: no meio disso, uns pedidos passam e outros dão 401. Espera 5 sucessos seguidos.
+echo "== esperando a chave de API valer em todos os serviços"
+seguidos=0
+for _ in $(seq 120); do
+  if oci network vcn list --compartment-id "$(python3 -c 'import configparser,os,sys; c=configparser.ConfigParser(); c.read(os.path.expanduser("~/.oci/config")); print(c[sys.argv[1]]["tenancy"])' "$PERFIL")" \
+       --limit 1 > /dev/null 2>&1; then
+    seguidos=$((seguidos + 1))
+    [[ $seguidos -ge 5 ]] && break
+  else
+    seguidos=0
+  fi
+  sleep 10
+done
+[[ $seguidos -ge 5 ]] || { echo "A autenticação não estabilizou em 20 min: confira a chave em ~/.oci/config." >&2; exit 1; }
 
 echo "== descobrindo a conta"
 TENANCY=$(python3 - "$PERFIL" <<'PY'
@@ -101,6 +119,7 @@ concluir() {
 }
 
 tentativa=0
+nao_autenticado=0
 while true; do
   existente=$(vm_existente)
   if [[ -n "$existente" && "$existente" != "null" ]]; then
@@ -120,7 +139,18 @@ while true; do
       echo "$(agora) tentativa $tentativa ($AD): ACEITA, criando..."
       concluir "$saida"
     elif grep -qiE "out of (host )?capacity" <<< "$saida"; then
+      nao_autenticado=0
       echo "$(agora) tentativa $tentativa ($AD): sem capacidade"
+    elif grep -q "NotAuthenticated" <<< "$saida"; then
+      # 401 isolado = propagação da chave; persistente (~30 min) = chave errada
+      nao_autenticado=$((nao_autenticado + 1))
+      echo "$(agora) tentativa $tentativa ($AD): 401 da Oracle, tentando de novo"
+      if [[ $nao_autenticado -ge 15 ]]; then
+        echo "$saida" >&2
+        avisar "A Oracle recusa a chave de API há muito tempo: o script parou."
+        exit 1
+      fi
+      continue
     elif grep -qiE "TooManyRequests|\"status\": 429" <<< "$saida"; then
       echo "$(agora) tentativa $tentativa ($AD): muitas requisições, esperando mais"
       sleep 120
