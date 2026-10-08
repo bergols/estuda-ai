@@ -401,6 +401,16 @@ devolve o token no corpo, recusa navegadores (`Sec-Fetch-Site` presente), para u
 na web não obter por ali o que o cookie `httpOnly` esconde. Ver
 [`modo-foco.md`](modo-foco.md), seções 3 e 4.
 
+## 8b. Tokens de terceiros: o Spotify (fase 7)
+
+O refresh token do Spotify dá acesso à conta de música de alguém por tempo indeterminado. Ele fica
+**cifrado na aplicação** (AES-256-GCM, chave em `CIFRA_CHAVES` no `.env`; `app/servicos/cifra.py`):
+o Postgres só guarda bytes opacos, e um backup do banco sozinho não abre nada. O AAD amarra cada
+valor ao usuário e ao campo (copiar o cifrado para outra linha faz a decifragem falhar), e o 1º byte
+é a versão da chave, para girá-la sem derrubar ninguém. O token nunca sai do servidor; o computador
+recebe só access tokens de 1 h. O fluxo PKCE dispensa *client secret* (o Client ID é público).
+Detalhes em [`modo-foco.md`](modo-foco.md), seção 4d, e [`modelagem.md`](modelagem.md).
+
 ## 9. CI
 
 `.github/workflows/ci.yml`, a cada push e pull request:

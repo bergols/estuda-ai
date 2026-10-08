@@ -676,3 +676,21 @@ NOT NULL, chave uuid NOT NULL, minutos int NOT NULL);`
 ```sql
 
 ```
+
+### 7.5 `NULLS NOT DISTINCT`, `FOR UPDATE` e `bytea`
+
+- (a) Crie (num banco de teste) `CREATE TABLE t (a int, b int, UNIQUE (a, b));` e insira
+  `(1, NULL)` duas vezes. Passa? Recrie com `UNIQUE NULLS NOT DISTINCT (a, b)` e repita. Como você
+  resolveria o mesmo problema num Postgres 14 (dica: índice único de expressão com `coalesce`)?
+- (b) Com duas sessões do `psql` e uma linha de `spotify_contas`: na 1ª, `BEGIN; SELECT ... FOR
+  UPDATE;`. Na 2ª, o mesmo `SELECT ... FOR UPDATE`. O que acontece? E com `SET LOCAL lock_timeout =
+  '2s'` antes? E com `FOR UPDATE NOWAIT` e `FOR UPDATE SKIP LOCKED`: para que serviria cada um?
+- (c) `SELECT octet_length(refresh_token), get_byte(refresh_token, 0), encode(substring(refresh_token
+  from 2 for 12), 'hex') FROM spotify_contas;` O que é cada coluna? Escreva a consulta que conta
+  quantas contas ainda estão cifradas com uma chave anterior à 2.
+
+**Minha resposta:**
+
+```sql
+
+```

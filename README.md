@@ -455,6 +455,8 @@ estuda-ai/
     foco em tela cheia, modo offline com SQLite e chaves de idempotência (testado contra
     envio simultâneo), analytics de foco (ROLLUP, LATERAL top-1 com Index Only Scan) e
     gráficos no painel.
-  - [ ] Spotify (OAuth com PKCE, refresh token cifrado, player por método/disciplina).
+  - [x] Spotify: OAuth com PKCE (retorno em 127.0.0.1), refresh token cifrado na aplicação
+    (AES-256-GCM), renovação com `FOR UPDATE`, playlist por disciplina/método/intervalo, player
+    do computador com tratamento de Spotify fechado, 401, 429 e cota.
   - [ ] Modo foco: janela por cima de tudo, bloqueio de programas e de sites (hosts),
     saída de emergência.

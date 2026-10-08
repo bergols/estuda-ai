@@ -10,7 +10,7 @@ A fase tem quatro sessões. Este documento cresce com elas:
 |---|---|---|
 | 1 | App Tauri, login no desktop, instaladores pelo CI | **concluída** |
 | 2 | Sessões de estudo, sincronização offline com idempotência, analytics | **concluída** |
-| 3 | Spotify: OAuth com PKCE, token cifrado, player | a fazer |
+| 3 | Spotify: OAuth com PKCE, token cifrado, player | **concluída** |
 | 4 | Bloqueio de programas e sites (arquivo hosts), saída de emergência | a fazer |
 
 ---
@@ -255,6 +255,107 @@ O SQLite local fica na pasta de dados do app (`~/Library/Application Support/
 io.github.bergols.estudaai/estuda-ai.db` no Mac, `%APPDATA%\io.github.bergols.estudaai\` no
 Windows), em modo WAL (a tela grava enquanto o laço lê) e com `CHECK (json_valid(...))`. A fila é
 separada por servidor (`origem`): sessão feita contra o localhost nunca vai para a produção.
+
+## 4d. Spotify
+
+### Configurar (uma vez)
+
+1. Em https://developer.spotify.com/dashboard → **Create app**: nome, descrição, **Redirect URI
+   `http://127.0.0.1:43821/callback`** e a API **Web API**. Desde fev/2026, o dono do app precisa
+   ser Premium, e um app em modo de desenvolvimento aceita até 5 usuários (para uso pessoal, sobra).
+2. Copie o **Client ID** para o `.env` do servidor (`SPOTIFY_CLIENT_ID=`). Não existe *client secret*
+   neste fluxo: não o coloque em lugar nenhum.
+3. O `.env` do servidor precisa de `CIFRA_CHAVES` (o `deploy/gerar-env.sh` já gera; para um `.env`
+   antigo: `echo "CIFRA_CHAVES=1:$(openssl rand -base64 32)" >> .env`). Reinicie o backend.
+4. No app desktop: Foco → Música → **Conectar o Spotify**. Escolha as playlists e o que fazer no
+   intervalo.
+
+Por que `127.0.0.1` e porta fixa: o Spotify não aceita mais `localhost` como redirect (só o IP de
+loopback, `127.0.0.1` ou `[::1]`). Ele aceitaria porta dinâmica em loopback, mas há relatos de o
+painel recusar URIs sem porta; a porta fixa funciona com a regra exata e com a flexível.
+
+### O fluxo (OAuth 2.0 Authorization Code com PKCE)
+
+```mermaid
+sequenceDiagram
+    participant App as App desktop (Rust)
+    participant Nav as Navegador
+    participant Sp as Spotify (accounts)
+    participant API as Nossa API
+    App->>App: verifier = 64 bytes aleatórios; challenge = SHA-256(verifier); state aleatório
+    App->>App: escuta em 127.0.0.1:43821
+    App->>Nav: abre /authorize?client_id&code_challenge&state&redirect_uri
+    Nav->>Sp: você aceita
+    Sp->>Nav: redireciona para 127.0.0.1:43821/callback?code&state
+    Nav->>App: GET /callback?code&state (app confere o state)
+    App->>API: POST /spotify/conectar {code, verifier, redirect_uri}
+    API->>Sp: troca code + verifier pelos tokens
+    API->>API: guarda o refresh CIFRADO (AES-256-GCM)
+    App->>API: POST /spotify/token (quando precisa)
+    API-->>App: access token (1 h)
+    App->>Sp: api.spotify.com/v1/me/player/... (direto)
+```
+
+- **PKCE** (RFC 7636) existe porque um app instalado não guarda segredo: qualquer um pode extrair
+  um *client secret* de um binário. Em vez disso, cada login tem um segredo de uso único (o
+  *verifier*). Só o *challenge* (o hash) passa pelo navegador; quem interceptar o `code` no retorno
+  não consegue trocá-lo sem o verifier. O cálculo é conferido com o exemplo do Apêndice B da RFC.
+- **`state`** protege contra CSRF do OAuth: sem ele, um site poderia mandar o seu navegador ao
+  `127.0.0.1:43821/callback` com um código da conta DELE, e o app conectaria a conta errada. O
+  state é conferido antes de qualquer outra coisa.
+- **O socket escuta em `127.0.0.1`**, nunca em `0.0.0.0`: outro computador da rede não alcança o
+  retorno. Ele fecha depois do primeiro retorno válido ou em 3 minutos.
+- **O refresh token fica no servidor**, cifrado. O computador só recebe access tokens de 1 h.
+  Conectou uma vez, vale no Mac e no Windows. Por que cifrar na aplicação e não com pgcrypto: ver
+  `modelagem.md` (a chave do pgcrypto viajaria dentro do SQL).
+
+### Renovação: por que o `FOR UPDATE`
+
+O access token vale 1 h. O servidor guarda o último e só renova quando faltam menos de 2 min. A
+renovação pode **trocar o refresh token** (o antigo deixa de valer). Se o Mac e o Windows
+renovassem ao mesmo tempo, os dois mandariam o mesmo refresh antigo: um receberia o novo, o outro
+levaria `invalid_grant`, e a conta pareceria revogada.
+
+```sql
+SET LOCAL lock_timeout = '15s';
+SELECT ... FROM spotify_contas WHERE usuario_id = :u FOR UPDATE;   -- o 2º espera aqui
+-- ainda vencido? renova no Spotify; grava access + refresh novos; COMMIT (solta)
+-- o 2º acorda, relê, vê o access novo e NÃO chama o Spotify
+```
+
+É uma exceção consciente à regra "rede fora de transação aberta" (o lock fica preso durante uma
+chamada HTTP de ~300 ms), com `lock_timeout` para não esperar para sempre. O teste com conexões reais
+(`test_dois_computadores_renovando_ao_mesmo_tempo`) usa um Spotify falso que troca o refresh e demora
+0,4 s: uma renovação só, o mesmo token para os dois, o refresh novo guardado.
+
+### Na sessão
+
+| Momento | Ação (preferência "pausar" / "trocar" / "continuar") |
+|---|---|
+| começo | toca a playlist da disciplina, senão a do método, senão a padrão |
+| foco → pausa | pausa / toca a do intervalo / nada |
+| pausa → foco | retoma de onde parou / volta para a do foco / nada |
+| pausa ou retomada manual | pausa / retoma |
+| fim | pausa |
+
+Toca no **Spotify deste computador** (dispositivo do tipo *Computer*, de preferência com o nome da
+máquina), nunca no celular ou na caixa de som. As regras ficam em `frontend/src/lib/foco/musica.ts` e
+`desktop/nucleo/src/spotify.rs`, ambas testadas sem rede.
+
+### Erros
+
+| Situação | O que o app faz |
+|---|---|
+| Spotify fechado (nenhum dispositivo) | abre o app (`spotify:`) e espera até 15 s ele aparecer; senão, aviso "abra o Spotify" |
+| Nenhum dispositivo ativo (404 `NO_ACTIVE_DEVICE`) | toca com `device_id` explícito; se ainda assim, transfere a reprodução e repete |
+| Token vencido ou revogado antes da hora (401) | pede ao servidor um token novo (`forcar`) e repete **uma** vez (sem laço) |
+| Autorização retirada (`invalid_grant`) | o servidor apaga a conexão; a tela pede para conectar de novo |
+| Limite de taxa (429) | respeita o `Retry-After`: as próximas chamadas nem saem do computador até lá |
+| Cota esgotada (429 com `"reason": "QUOTA_EXCEEDED"`, desde jul/2026) | aviso de que a música volta amanhã |
+| Sem Premium (403 `PREMIUM_REQUIRED`) | aviso específico |
+| Pausar o que já está pausado (403 "Restriction violated") | conta como sucesso |
+
+Erro de música **nunca** interrompe a sessão: o timer segue, e a tela mostra o aviso.
 
 ## 5. Instaladores e CI
 

@@ -39,9 +39,9 @@ do autor (`docs/deploy.md`, seção 4). **Hoje, provisoriamente**, a API roda no
 Oracle sair (script `deploy/oracle-criar-vm.sh`). Roadmap no `README.md`.
 
 **Fase 7** (app desktop, sessões de estudo, Spotify, modo foco) em 4 sessões, plano aprovado:
-(1) app Tauri + login + instaladores e (2) sessões de estudo, SQLite offline com chaves de
-idempotência, analytics de foco **concluídas**; (3) Spotify (PKCE, refresh token cifrado na
-aplicação com AES-GCM, não pgcrypto); (4) bloqueio de programas e de sites (hosts, com
+(1) app Tauri + login + instaladores, (2) sessões de estudo, SQLite offline com chaves de
+idempotência, analytics de foco e (3) Spotify (PKCE, refresh token cifrado na aplicação com
+AES-GCM, não pgcrypto) **concluídas**; (4) bloqueio de programas e de sites (hosts, com
 restauração garantida) e saída de emergência. Decisões já tomadas pelo autor: o desktop
 fala com o **BFF da Vercel** (não direto com a API); a sessão de estudo roda só no desktop
 (a web mostra painel/histórico).
@@ -285,6 +285,12 @@ Detalhes e o porquê em `docs/modo-foco.md`.
   o SQLite (`nucleo::fila`) e um laço em `src-tauri/src/sincronia.rs` envia; o servidor é
   idempotente (`backend/app/servicos/sessoes.py`: `ON CONFLICT`, `SAVEPOINT` por sessão,
   releitura em comando novo). Campo novo na sessão: schema Pydantic + `SQL_SESSAO` + migration.
+- Spotify: o refresh token só existe no servidor, cifrado (`app/servicos/cifra.py`, contexto
+  `spotify:<usuario>:<campo>` no AAD). Renovação com `FOR UPDATE` (`token_valido`). O desktop pega
+  access tokens em `POST /spotify/token` e fala direto com api.spotify.com (`src-tauri/src/spotify.rs`);
+  regras puras em `nucleo/src/spotify.rs` e `frontend/src/lib/foco/musica.ts`. Nenhum teste chama o
+  Spotify real: `SpotifyFalso` (backend, `httpx.MockTransport`) e `mockito` (Rust). Redirect fixo
+  `http://127.0.0.1:43821/callback`; nunca `localhost`, nunca escutar em 0.0.0.0.
 - Instaladores: `.github/workflows/desktop.yml`, só por tag `desktop-v<versão do
   tauri.conf.json>` (Release em rascunho) ou "Run workflow". Não rode a cada push: minuto
   de macOS custa 10x na cota do repositório privado.
