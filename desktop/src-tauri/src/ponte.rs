@@ -131,7 +131,9 @@ pub async fn chamar_api(
         &estado,
         cabecalho("x-metodo").as_deref().unwrap_or_default(),
         cabecalho("x-caminho").as_deref().unwrap_or_default(),
-        cabecalho("content-type").filter(|t| !t.is_empty()),
+        // "x-tipo" e não "content-type": o IPC do Tauri sobrescreve o content-type com
+        // application/octet-stream (ver frontend/src/lib/desktop.ts)
+        cabecalho("x-tipo").filter(|t| !t.is_empty()),
         corpo,
     )
     .await

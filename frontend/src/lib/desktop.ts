@@ -44,7 +44,10 @@ export async function fetchPelaPonte(entrada: RequestInfo | URL, init?: RequestI
     headers: {
       "x-metodo": pedido.method,
       "x-caminho": caminhoDaPonte(new URL(pedido.url)),
-      "content-type": pedido.headers.get("content-type") ?? "",
+      // NÃO "content-type": o IPC do Tauri sobrescreve esse cabeçalho com
+      // application/octet-stream (o tipo do corpo binário do próprio IPC), e a API
+      // receberia bytes em vez de JSON. O tipo real do pedido vai em x-tipo.
+      "x-tipo": pedido.headers.get("content-type") ?? "",
     },
   });
   return respostaDaPonte(resposta);
