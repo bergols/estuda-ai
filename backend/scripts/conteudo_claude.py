@@ -10,12 +10,14 @@ alternativas e exatamente 1 correta, e uma linha de auditoria em geracoes com o 
 
 Roda dentro do container do backend (o banco e o modelo de embeddings estão lá):
 
-    D="docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.conteudo_claude"
-    $D materiais                                  # disciplinas e materiais da conta
-    $D trechos --material 7                       # texto do material, com o id de cada trecho
-    $D trechos --disciplina 3 --tema "índices"    # trechos mais relevantes para um tema
-    $D importar --simular < lote.json             # valida e mostra o que faria, sem gravar
-    $D importar < lote.json                       # grava
+    d() { docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.conteudo_claude "$@"; }
+    d materiais                                   # disciplinas e materiais da conta
+    d trechos --material 7                        # texto do material, com o id de cada trecho
+    d trechos --disciplina 3 --tema "índices"     # trechos mais relevantes para um tema
+    d importar --simular < lote.json              # valida e mostra o que faria, sem gravar
+    d importar < lote.json                        # grava
+
+(Função de shell, não variável: no zsh, "$D" com espaços não é dividido em palavras.)
 
 Formato do lote (JSON):
 

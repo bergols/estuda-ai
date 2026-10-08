@@ -98,12 +98,13 @@ embedding, ligação com os trechos, 4 alternativas e 1 correta, auditoria com m
 
 ```bash
 cd ~/estuda-ai-servidor
-D="docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.conteudo_claude"
-$D materiais                                   # disciplinas, materiais, nº de trechos
-$D trechos --material 7                        # texto com o id de cada trecho
-$D trechos --disciplina 3 --tema "índices"     # trechos mais relevantes para um tema
-$D importar --simular < /caminho/lote.json     # valida e desfaz
-$D importar < /caminho/lote.json               # grava
+# Função, não variável: o zsh não divide "$D" em palavras
+d() { docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.conteudo_claude "$@"; }
+d materiais </dev/null                         # disciplinas, materiais, nº de trechos
+d trechos --material 7 </dev/null              # texto com o id de cada trecho
+d trechos --disciplina 3 --tema "índices" </dev/null   # trechos mais relevantes para um tema
+d importar --simular < ~/lote.json             # valida e desfaz
+d importar < ~/lote.json                       # grava
 ```
 
 Como fazer bem:
