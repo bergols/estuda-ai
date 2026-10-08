@@ -37,7 +37,7 @@ export function ListaDisciplinas() {
         {disciplinas.data?.map((d, i) => (
           <li key={d.id}>
             <Link
-              href={`/disciplinas/${d.id}`}
+              href={`/disciplina?id=${d.id}`}
               className="group grid grid-cols-[2.5rem_1fr_auto] items-baseline gap-x-3 py-4"
             >
               <span className="font-mono text-sm text-apagado">{String(i + 1).padStart(2, "0")}</span>
