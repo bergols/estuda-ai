@@ -577,3 +577,19 @@ class Tentativa(Base):
         ),
         Index("ix_tentativas_questao_respondida_em", questao_id, respondida_em),
     )
+
+
+class AtualizacaoMV(Base):
+    """Quando cada materialized view foi atualizada (REFRESH) e quanto demorou.
+
+    As views em si (vw_respostas, mv_respostas_diarias) não são modelos do ORM:
+    são lidas com SQL explícito em app/servicos/analytics.py.
+    """
+
+    __tablename__ = "atualizacoes_mv"
+
+    nome: Mapped[str] = mapped_column(Text, primary_key=True)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duracao_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (CheckConstraint("duracao_ms >= 0", name="duracao_nao_negativa"),)
