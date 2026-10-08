@@ -10,7 +10,8 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
 - **Explique as decisões de banco.** Em commits e em `docs/` (`modelagem.md` para o
   schema, `busca-semantica.md` para busca/índices/transações do pipeline,
   `geracao-llm.md` para LLM/RAG/auditoria, `repeticao-espacada.md` para SM-2/fila/
-  concorrência/fuso, `analytics.md` para as consultas analíticas), diga o
+  concorrência/fuso, `analytics.md` para as consultas analíticas, `seguranca.md` para
+  auth/isolamento/injection/rate limit/privilégios/CI), diga o
   *porquê* (alternativas consideradas, custo/benefício), não só o quê. Didático,
   em português.
 - **Commits pequenos, Conventional Commits em português** (`feat:`, `fix:`, `docs:`,
@@ -24,8 +25,11 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
 Fases 1 (fundação + modelagem), 2 (upload de PDF, embeddings, busca semântica/textual/
 híbrida, experimento HNSW), 3 (RAG com a API da Anthropic: perguntar, flashcards,
 questões, tentativas, auditoria de custos), 4 (SM-2, fila do dia, concorrência, fuso) e 5
-(analytics com SQL avançado, views e materialized view) concluídas. Próxima: fase 6
-(frontend Next.js, autenticação, deploy). Roadmap no `README.md`.
+(analytics com SQL avançado, views e materialized view) concluídas. Fase 6 em 3 sessões:
+(1) segurança + CI, **concluída**; (2) frontend Next.js + dashboard (Recharts) + job de
+build do frontend no CI; (3) deploy (apresentar 2-3 opções de hospedagem ao autor e só
+fazer depois que ele escolher), backup com `pg_dump`, diagrama Mermaid no README,
+exercícios da fase 6. Roadmap no `README.md`.
 Pendente da fase 3: o teste real com a API (falta `ANTHROPIC_API_KEY` no `.env`). Exercícios de SQL por fase em `docs/exercicios.md` (sem respostas; o autor
 preenche "Minha resposta:").
 
@@ -40,6 +44,9 @@ docker compose exec backend alembic revision -m "descricao"
 docker compose exec db psql -U estuda_ai -d estuda_ai
 docker compose exec backend python -m scripts.seed_experimento   # 50 mil trechos sintéticos
 docker compose exec backend python -m scripts.experimento_hnsw   # regenera docs/experimentos/hnsw.md
+docker compose exec backend python -m scripts.criar_usuario --email x@y.com --nome "X"  # única forma de criar conta
+docker compose exec backend ruff check .                         # lint (o mesmo do CI)
+docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git --redact /repo   # segredos no histórico
 ```
 
 Seeds: `scripts/seed_experimento.py` (50 mil trechos sintéticos, fase 2) e
@@ -47,8 +54,8 @@ Seeds: `scripts/seed_experimento.py` (50 mil trechos sintéticos, fase 2) e
 `--alunos 200` cria volume para o EXPLAIN, fase 5).
 
 Docker aqui é **Colima** (`colima start` se o socket não responder). Testes também
-rodam no host com `uv run pytest`, sobrescrevendo `DATABASE_URL`/`TEST_DATABASE_URL`
-com `localhost` no lugar de `db`.
+rodam no host com `uv run pytest`, sobrescrevendo `DATABASE_URL`/`MIGRATION_DATABASE_URL`
+com `localhost` no lugar de `db` (o banco de teste é sempre `<banco>_test`).
 
 Armadilhas de ambiente já encontradas:
 - O `--reload` do uvicorn só funciona com `WATCHFILES_FORCE_POLLING` (já no compose): os
@@ -59,6 +66,11 @@ Armadilhas de ambiente já encontradas:
   consome o stdin: use `</dev/null`.
 - Nas migrations, nomes passados a `op.drop_constraint` vão com `op.f("...")`; sem isso a
   naming convention adiciona o prefixo de novo (`ck_materiais_ck_materiais_...`).
+- Não rode lint com pipe (`ruff ... | tail`): o pipe engole o código de saída.
+- FastAPI 0.14x: `app.routes` não lista as rotas dos routers incluídos; use
+  `app.openapi()["paths"]` (meta-testes de `test_isolamento.py`).
+- gitleaks: allowlist global com `paths` pula o ARQUIVO inteiro, mesmo com
+  `condition = "AND"`. Use só `regexes` com `regexTarget = "line"` ancorado.
 
 ## Convenções de banco (seguir nas próximas migrations)
 
@@ -106,13 +118,43 @@ Armadilhas de ambiente já encontradas:
   não têm transação comum: no upload, apagar o arquivo se o INSERT falhar; no delete,
   apagar o arquivo só depois do COMMIT.
 
+## Segurança (fase 6)
+
+Detalhes e o porquê em `docs/seguranca.md`.
+
+- **Dois papéis no banco.** A API e os testes conectam como `estuda_ai_app` (`DATABASE_URL`);
+  migrations e scripts de admin/seed como o dono (`MIGRATION_DATABASE_URL`). Tabela nova =
+  `GRANT` explícito na migration que a cria (não há `DEFAULT PRIVILEGES`) + atualizar
+  `ESPERADO` em `tests/test_privilegios.py`. Tabelas de histórico/auditoria: só
+  `SELECT, INSERT`. Nos testes, dado "no passado" vai no INSERT (`criado_em=...`), não num
+  `UPDATE` posterior. Teste que precisa de DDL ou de apagar usuários usa `engine_dono`/
+  `session_dono`.
+- O que exige ser dono (ex.: `REFRESH MATERIALIZED VIEW`) vira função `SECURITY DEFINER` com
+  `SET search_path = pg_catalog, public, pg_temp` + `REVOKE EXECUTE ... FROM PUBLIC` + `GRANT`
+  ao app.
+- **Rota nova** → caso em `CASOS_404` ou `CASOS_LISTAS` de `tests/test_isolamento.py` (o
+  meta-teste falha sem isso). Rotas que chamam o LLM recebem `_: ProtecaoIA` **depois** de
+  `DisciplinaDoUsuario` (dado alheio continua 404 e não gasta cota).
+- **SQL:** valores sempre como bind parameter. Identificador dinâmico só via allowlist
+  (`_coluna()` em `analytics.py`) ou `psycopg.sql.Identifier`; comandos utilitários sem bind
+  (`ALTER ROLE ... PASSWORD`) com `psycopg.sql.Literal`.
+- Senhas: argon2id (`app/servicos/auth.py`), mínimo 12 caracteres. JWT HS256 com
+  `algorithms=["HS256"]` fixo; `JWT_SECRET` é `SecretStr`. Sem cadastro público:
+  `scripts/criar_usuario.py`.
+- Rate limit: UPSERT em `limites_taxa` (UNLOGGED, janela fixa com `date_bin`), commit imediato.
+  Cota diária contada em `geracoes`.
+- CI (`.github/workflows/ci.yml`): ruff, migrations nos dois sentidos, `alembic check`, pytest
+  (sem o grupo de dependências `modelo`) e gitleaks no histórico inteiro. Rode testes e build
+  antes de cada push. Dependência pesada nova que só o modelo usa vai no grupo `modelo`.
+
 ## Analytics (fase 5)
 
 - Toda consulta analítica é SQL explícito em `app/servicos/analytics.py` (`text()`), comentada
   com o conceito que ensina; documentada em `docs/analytics.md`.
 - Histórico agregado lê `mv_respostas_diarias` (e a rota devolve `atualizado_em`); o que precisa
   refletir "agora" (sequência, previsão, ranking, custos) é ao vivo. `POST /analytics/atualizar`
-  faz `REFRESH ... CONCURRENTLY` (exige o índice único da MV).
+  faz `REFRESH ... CONCURRENTLY` (exige o índice único da MV) pela função SECURITY DEFINER
+  `atualizar_mv_respostas_diarias()`.
 - Dia/semana/mês sempre no fuso do usuário (`vw_respostas.dia` já vem local).
 - Séries para gráfico são **densificadas** (`generate_series` + `LEFT JOIN`) antes de janelas e
   `LAG`. Taxas = razão das somas. Período limitado a 731 dias.
@@ -169,9 +211,8 @@ Armadilhas de ambiente já encontradas:
 - Disciplina do usuário via dependência `DisciplinaDoUsuario` (404 se não for dele).
 - Tarefas em background recebem a fábrica de sessões (`FabricaSessaoDep`), nunca a sessão
   da requisição. Modelo de embeddings via `EmbedderDep` (nos testes, `EmbedderFalso`).
-- Usuário atual via dependência `UsuarioAtual` (provisório: header `X-Usuario-Id`;
-  será trocado por autenticação sem mudar as rotas). Toda consulta filtra pelo dono;
-  recurso de outro usuário → 404.
+- Usuário atual via dependência `UsuarioAtual` (JWT Bearer, confere `versao_token`). Toda
+  consulta filtra pelo dono; recurso de outro usuário → 404 (nunca 403).
 - Nomes de domínio em português (tabelas, colunas, funções, testes).
 - Testes contra Postgres real, nunca SQLite. Cada teste roda numa transação desfeita
   no fim (ver `tests/conftest.py`). Regras do banco têm teste em `tests/test_schema.py`.

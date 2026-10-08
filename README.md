@@ -9,8 +9,8 @@ desempenho por disciplina e tópico.
 (PostgreSQL, modelagem, índices, transações e busca vetorial). Por isso as decisões de
 banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/modelagem.md),
 [busca semântica](docs/busca-semantica.md), [geração com LLM](docs/geracao-llm.md),
-[repetição espaçada](docs/repeticao-espacada.md), [analytics](docs/analytics.md) e
-[exercícios de SQL](docs/exercicios.md).
+[repetição espaçada](docs/repeticao-espacada.md), [analytics](docs/analytics.md),
+[segurança](docs/seguranca.md) e [exercícios de SQL](docs/exercicios.md).
 
 ## Stack
 
@@ -22,7 +22,8 @@ banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/mode
 | PDF | PyMuPDF |
 | LLM | API da Anthropic (SDK `anthropic`), padrão Claude Haiku 4.5, saída estruturada validada com Pydantic |
 | Frontend | Next.js + TypeScript (fase 6) |
-| Infra | Docker Compose |
+| Autenticação | argon2id (senhas) + JWT; papel do banco com menor privilégio |
+| Infra | Docker Compose, GitHub Actions (testes + gitleaks) |
 | Testes | pytest contra Postgres real |
 
 ## Como rodar
@@ -44,15 +45,23 @@ Depois, na raiz do projeto:
 cp .env.example .env
 ```
 
-Edite o `.env` e troque `troque-esta-senha` (nas três linhas) por uma senha sua. Para as
-rotas que usam o LLM, descomente `ANTHROPIC_API_KEY` e coloque sua chave (o `.env` nunca vai
-para o Git). Então:
+Edite o `.env`:
+
+- troque `troque-esta-senha` (nas duas linhas: é a senha do **dono** do banco, usada pelas
+  migrations) e `troque-esta-outra-senha` (a do papel `estuda_ai_app`, com que a API
+  conecta). Use senhas diferentes: ver [menor privilégio](docs/seguranca.md#6-menor-privilégio-no-banco);
+- gere o `JWT_SECRET` com `openssl rand -hex 32`;
+- para as rotas que usam o LLM, descomente `ANTHROPIC_API_KEY` e coloque sua chave (o
+  `.env` nunca vai para o Git).
+
+Então:
 
 ```bash
 docker compose up --build
 ```
 
-O backend aplica as migrations sozinho ao subir (`alembic upgrade head`). A primeira
+O backend aplica as migrations sozinho ao subir (`alembic upgrade head`, como dono), dá
+login ao papel da aplicação (`scripts/papel_app.py`) e só então sobe a API. A primeira
 subida demora: a imagem tem ~1,7 GB (torch para CPU). O modelo de embeddings (~470 MB)
 é baixado no primeiro upload e fica no volume `modelos`. Para baixar antes:
 
@@ -78,6 +87,8 @@ docker compose exec backend pytest
 ```
 
 Os testes criam e usam um banco separado (`estuda_ai_test`), então não mexem nos seus dados.
+Eles conectam como `estuda_ai_app`, o mesmo papel da API: um teste que precisasse de um
+privilégio que a API não tem falharia aqui, e não só em produção.
 Eles usam um embedder falso (rápido, sem baixar o modelo). O teste com o modelo real é
 separado:
 
@@ -94,34 +105,50 @@ docker compose exec db psql -U estuda_ai -d estuda_ai
 Comandos úteis no psql: `\dt` (tabelas), `\d+ flashcards` (estrutura completa),
 `\di` (índices).
 
-### Experimentar a API
+### Criar a sua conta
 
-Ainda não há login: o usuário é identificado pelo header `X-Usuario-Id` (provisório).
+Não há cadastro público: a conta é criada por um comando de admin, que pede a senha
+(mínimo 12 caracteres) duas vezes sem mostrá-la:
 
 ```bash
-curl -X POST localhost:8000/usuarios -H 'Content-Type: application/json' -d '{"nome":"Ana","email":"ana@furg.br"}'
+docker compose exec backend python -m scripts.criar_usuario --email voce@exemplo.com --nome "Seu nome"
 ```
 
+Esqueceu a senha? Rode de novo com `--redefinir-senha` (isso também desconecta todos os
+aparelhos).
+
+### Experimentar a API
+
+Pelo navegador: http://localhost:8000/docs, botão **Authorize** (e-mail no campo
+`username`). Pelo terminal, faça login e guarde o token (vale 30 dias):
+
 ```bash
-curl -X POST localhost:8000/disciplinas -H 'Content-Type: application/json' -H 'X-Usuario-Id: 1' -d '{"nome":"Banco de Dados"}'
+TOKEN=$(curl -s localhost:8000/auth/login --data-urlencode 'username=voce@exemplo.com' --data-urlencode 'password=sua senha' | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+```
+
+O comando acima deixa a senha no histórico do shell; se preferir, use o `/docs`. Para
+desconectar todos os aparelhos: `curl -X POST localhost:8000/auth/sair-de-todos -H "Authorization: Bearer $TOKEN"`.
+
+```bash
+curl -X POST localhost:8000/disciplinas -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -d '{"nome":"Banco de Dados"}'
 ```
 
 Envie um PDF (responde 202; o processamento roda em background):
 
 ```bash
-curl -X POST localhost:8000/disciplinas/1/materiais -H 'X-Usuario-Id: 1' -F 'arquivo=@aula.pdf;type=application/pdf'
+curl -X POST localhost:8000/disciplinas/1/materiais -H "Authorization: Bearer $TOKEN" -F 'arquivo=@aula.pdf;type=application/pdf'
 ```
 
 Acompanhe o `status` (`pendente` → `processando` → `concluido` ou `erro`):
 
 ```bash
-curl localhost:8000/disciplinas/1/materiais -H 'X-Usuario-Id: 1'
+curl localhost:8000/disciplinas/1/materiais -H "Authorization: Bearer $TOKEN"
 ```
 
 Busque (`modo` = `semantica`, `textual` ou `hibrida`):
 
 ```bash
-curl -G localhost:8000/disciplinas/1/busca -H 'X-Usuario-Id: 1' --data-urlencode 'q=como desfazer uma transação' -d k=5 -d modo=hibrida
+curl -G localhost:8000/disciplinas/1/busca -H "Authorization: Bearer $TOKEN" --data-urlencode 'q=como desfazer uma transação' -d k=5 -d modo=hibrida
 ```
 
 ### Experimento de desempenho
@@ -145,27 +172,27 @@ Precisa de `ANTHROPIC_API_KEY` no `.env` (depois de editar, recrie o container:
 `docker compose up -d backend`). Pergunte ao material:
 
 ```bash
-curl -X POST localhost:8000/disciplinas/1/perguntar -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"pergunta":"O que o ROLLBACK faz?"}'
+curl -X POST localhost:8000/disciplinas/1/perguntar -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"pergunta":"O que o ROLLBACK faz?"}'
 ```
 
 Gere flashcards (de um material ou de um tema) e questões:
 
 ```bash
-curl -X POST localhost:8000/disciplinas/1/flashcards/gerar -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"material_id":1,"quantidade":5}'
+curl -X POST localhost:8000/disciplinas/1/flashcards/gerar -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"material_id":1,"quantidade":5}'
 ```
 
 ```bash
-curl -X POST localhost:8000/disciplinas/1/questoes/gerar -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"tema":"índices","quantidade":3}'
+curl -X POST localhost:8000/disciplinas/1/questoes/gerar -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"tema":"índices","quantidade":3}'
 ```
 
 Responda uma questão e veja o gasto:
 
 ```bash
-curl -X POST localhost:8000/disciplinas/1/questoes/1/tentativas -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"alternativa":"B","tempo_ms":8000}'
+curl -X POST localhost:8000/disciplinas/1/questoes/1/tentativas -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"alternativa":"B","tempo_ms":8000}'
 ```
 
 ```bash
-curl localhost:8000/gastos -H 'X-Usuario-Id: 1'
+curl localhost:8000/gastos -H "Authorization: Bearer $TOKEN"
 ```
 
 Nos testes a API da Anthropic é sempre simulada: nenhum teste gasta tokens.
@@ -175,13 +202,13 @@ Nos testes a API da Anthropic é sempre simulada: nenhum teste gasta tokens.
 Cards vencidos até o fim de hoje (no fuso do usuário), do mais atrasado ao menos:
 
 ```bash
-curl 'localhost:8000/revisoes/hoje?limite=10' -H 'X-Usuario-Id: 1'
+curl 'localhost:8000/revisoes/hoje?limite=10' -H "Authorization: Bearer $TOKEN"
 ```
 
 Registre a nota (0 a 5) mandando a `versao` que veio na fila (409 se o card mudou desde então):
 
 ```bash
-curl -X POST localhost:8000/revisoes/1 -H 'X-Usuario-Id: 1' -H 'Content-Type: application/json' -d '{"nota":4,"versao":0}'
+curl -X POST localhost:8000/revisoes/1 -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"nota":4,"versao":0}'
 ```
 
 Dados realistas (6 semanas simuladas) e o experimento do índice da fila:
@@ -200,7 +227,7 @@ Dados prontos para plotar (os gráficos são da Fase 6), todos com `disciplina_i
 período, `de`/`ate` (datas no fuso do usuário):
 
 ```bash
-curl 'localhost:8000/analytics/evolucao/semanal' -H 'X-Usuario-Id: 1'
+curl 'localhost:8000/analytics/evolucao/semanal' -H "Authorization: Bearer $TOKEN"
 ```
 
 | Rota | Conteúdo |
@@ -229,16 +256,18 @@ docker compose exec backend python -m scripts.experimento_analytics
 ```
 estuda-ai/
 ├── docker-compose.yml
+├── .github/workflows/ci.yml # lint + testes (Postgres+pgvector) + gitleaks
+├── .gitleaks.toml           # exceções (estreitas) da varredura de segredos
 ├── backend/
 │   ├── app/
 │   │   ├── main.py          # FastAPI + /health
 │   │   ├── models.py        # modelos SQLAlchemy (espelho do schema)
 │   │   ├── schemas.py       # contratos Pydantic da API
-│   │   ├── deps.py          # dependências (sessão, usuário atual, embedder)
+│   │   ├── deps.py          # dependências (sessão, usuário do token, proteção de IA)
 │   │   ├── routers/         # rotas por recurso
 │   │   └── servicos/        # pdf, chunking, embeddings, busca, llm, rag, gerar, sm2, revisao, analytics
 │   ├── alembic/versions/    # migrations: a fonte da verdade do schema
-│   ├── scripts/             # seeds e experimentos (HNSW, fila do dia, analytics)
+│   ├── scripts/             # admin (criar_usuario, papel_app), seeds e experimentos
 │   └── tests/
 ├── docs/
 │   ├── modelagem.md         # diagrama ER e decisões de banco
@@ -246,6 +275,7 @@ estuda-ai/
 │   ├── geracao-llm.md       # RAG, saída estruturada, N:N, alternativas, auditoria
 │   ├── repeticao-espacada.md # SM-2, estado x histórico, fila, concorrência, fuso
 │   ├── analytics.md         # views, window functions, gaps-and-islands, EXPLAIN
+│   ├── seguranca.md         # argon2id, JWT, isolamento, SQL injection, rate limit, privilégios
 │   ├── exercicios.md        # exercícios de SQL por fase
 │   └── experimentos/        # resultados gerados por script
 └── frontend/                # fase 6
@@ -271,6 +301,11 @@ estuda-ai/
 - [x] **Fase 5: analytics.** Endpoints com SQL analítico explícito (GROUPING SETS, window
   functions, LAG, DENSE_RANK, gaps-and-islands, generate_series, percentile_cont), VIEW e
   MATERIALIZED VIEW com REFRESH CONCURRENTLY, e otimização provada com EXPLAIN ANALYZE.
-- [ ] **Fase 6: frontend e otimização.** Next.js, autenticação, fila de processamento
-  robusta (`FOR UPDATE SKIP LOCKED`), limpeza de arquivos órfãos, ajuste de
-  `ef_search`/`m` com dados reais e deploy.
+- [ ] **Fase 6: frontend, segurança e deploy.**
+  - [x] Segurança e CI: login com argon2id + JWT (30 dias, "sair de todos"), sem cadastro
+    público, testes de isolamento entre usuários em toda rota, auditoria de SQL injection,
+    rate limit e cota diária de IA no Postgres, papel do banco com menor privilégio,
+    GitHub Actions (testes contra Postgres+pgvector e gitleaks no histórico).
+  - [ ] Frontend Next.js (disciplinas, busca, perguntas, revisão do dia, questões,
+    dashboard com Recharts).
+  - [ ] Deploy, backup com `pg_dump` e diagrama de arquitetura.

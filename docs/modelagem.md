@@ -63,8 +63,15 @@ erDiagram
         text nome
         text email UK "único em lower(email)"
         text fuso_horario "padrão America/Sao_Paulo"
+        text senha_hash "argon2id; NULL = conta sem login (fase 6)"
+        int versao_token "sobe no 'sair de todos' (fase 6)"
         timestamptz criado_em
         timestamptz atualizado_em
+    }
+    limites_taxa {
+        text chave PK "ex. login:ip:1.2.3.4 (fase 6)"
+        timestamptz janela_inicio PK "date_bin da janela"
+        int contagem "UNLOGGED, sem FK"
     }
     disciplinas {
         bigint id PK
@@ -263,17 +270,25 @@ explica por que `WHERE x = NULL` nunca encontra nada (use `IS NULL`).
 
 ### `usuarios`
 
-Quem usa o sistema. Ainda **não** tem `senha_hash`: autenticação entra numa fase
-futura, com uma migration que adiciona a coluna — ótimo exercício de evolução de schema
-(como adicionar uma coluna `NOT NULL` numa tabela que já tem linhas?).
+Quem usa o sistema.
+
+- `senha_hash` (fase 6): hash **argon2id**, nunca a senha (ver `seguranca.md`, seção 1).
+  Entrou como coluna **nullable** numa tabela que já tinha linhas: não dá para inventar a
+  senha de quem já existia, então `NULL` significa "conta sem login" até o admin definir
+  uma (`scripts/criar_usuario.py --redefinir-senha`). `CHECK (senha_hash LIKE
+  '$argon2id$%')` recusa qualquer outra coisa, inclusive texto puro gravado por engano.
+- `versao_token` (fase 6): vai dentro de cada JWT; o "sair de todos" soma 1 e todo token
+  antigo deixa de valer. É a revogação de um token que, sem isso, só morreria no `exp`.
 
 - `UNIQUE` em `lower(email)`: é um **índice de expressão**. Sem o `lower()`,
   `Ana@X.com` e `ana@x.com` seriam contas diferentes. Um UNIQUE sobre expressão só pode
   ser criado como índice (`CREATE UNIQUE INDEX`), não como constraint de tabela.
   Para o índice ser usado na busca, a consulta precisa usar a mesma expressão:
-  `WHERE lower(email) = lower(:email)`.
-- `CHECK (position('@' in email) > 1)`: validação mínima. Validação completa fica na API
-  (Pydantic `EmailStr`); o banco garante só o que nunca pode ser violado.
+  `WHERE lower(email) = lower(:email)` (é o que o login faz: `auth.consulta_por_email`).
+  `ILIKE` **não** serve: não usa o índice e trata `%` e `_` como curingas (ver
+  `seguranca.md`, seção 4).
+- `CHECK (position('@' in email) > 1)`: validação mínima; o banco garante só o que nunca
+  pode ser violado. Não há cadastro pela API (fase 6): contas nascem no script de admin.
 
 ### `disciplinas`
 
@@ -418,6 +433,24 @@ Auditoria de cada chamada ao LLM: tokens, custo (gravado no momento, como o pre�
 de um pedido), duração e status. A FK composta `(disciplina_id, usuario_id)` com
 `ON DELETE SET NULL (disciplina_id)` mantém a auditoria e o dono quando a disciplina é
 apagada. Ver `geracao-llm.md`, seção 7.
+
+Fase 6: é também a base da **cota diária** de IA (quantas gerações o usuário fez desde a
+meia-noite no fuso dele). O papel da API só tem `SELECT, INSERT` nela: auditoria de gasto
+não se altera nem se apaga.
+
+### `limites_taxa` (fase 6)
+
+Contadores do rate limiting: uma linha por `(chave, janela_inicio)`, incrementada por um
+UPSERT atômico (`INSERT ... ON CONFLICT DO UPDATE SET contagem = contagem + 1`). Detalhes
+em `seguranca.md`, seção 5. Três decisões de modelagem:
+
+- **Sem FK e sem `usuario_id`:** a chave é um texto (`login:ip:...`, `login:email:...`,
+  `ia:usuario:...`), porque o limite de login vale para IPs e e-mails que nem têm conta.
+- **`UNLOGGED`:** não escreve no WAL (mais rápida) e é esvaziada se o Postgres cair.
+  Perder contadores de 15 minutos num crash é aceitável; perder dados de estudo não seria.
+  Tabela `UNLOGGED` também não vai para réplicas.
+- Índice em `janela_inicio` para a limpeza (`DELETE ... WHERE janela_inicio < now() -
+  interval '1 day'`), que roda na primeira contagem de cada janela nova.
 
 ---
 
@@ -640,6 +673,16 @@ sem ser chave. Consultas que só precisam dessas três colunas são respondidas 
 Views não aparecem em `app/models.py` (o ORM não as gerencia); são lidas com SQL explícito.
 
 ---
+
+## 6b. Privilégios (fase 6)
+
+A API não conecta como dona das tabelas: usa o papel `estuda_ai_app`, que só tem os
+privilégios de dados de que precisa, tabela por tabela (matriz em
+`tests/test_privilegios.py`, explicação em `seguranca.md`, seção 6). Para o schema, a
+consequência prática: **toda tabela nova precisa de um `GRANT` na migration que a cria**, e
+`REFRESH` da materialized view passa pela função `SECURITY DEFINER`
+`atualizar_mv_respostas_diarias()`. As ações de `ON DELETE CASCADE` continuam funcionando
+para tabelas em que o app não tem `DELETE`, porque rodam com os privilégios do dono.
 
 ## 7. ON DELETE: o que acontece ao apagar
 
