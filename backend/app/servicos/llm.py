@@ -134,6 +134,17 @@ class ClienteLLM:
         def ms() -> int:
             return int((time.monotonic() - inicio) * 1000)
 
+        # Sem chave, o SDK só percebe ao montar a requisição e lança TypeError (não um
+        # AnthropicError): a rota responderia 500 e a falha escaparia da auditoria.
+        # Conferido aqui, vira um erro_api comum. (O cliente falso dos testes não tem
+        # api_key: getattr com valor padrão.)
+        if getattr(self.cliente, "api_key", "injetado") is None and getattr(
+            self.cliente, "auth_token", None
+        ) is None:
+            raise ErroGeracao(
+                "erro_api", "ANTHROPIC_API_KEY não configurada no servidor", self.modelo, uso, ms()
+            )
+
         erro = ""
         for _ in range(2):  # 1 tentativa + 1 nova tentativa se a validação falhar
             try:

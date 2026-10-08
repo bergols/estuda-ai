@@ -75,6 +75,21 @@ def test_erro_da_api_vira_erro_api_sem_nova_tentativa():
     assert len(falso.chamadas) == 1
 
 
+def test_sem_chave_configurada_vira_erro_api_e_nao_500(monkeypatch):
+    """Sem ANTHROPIC_API_KEY, o SDK lança TypeError (não um AnthropicError) ao montar
+    a requisição. Sem tratar, a rota respondia 500 e a falha não ia para a auditoria.
+    Nenhuma requisição sai: o SDK falha antes de abrir conexão."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    llm = ClienteLLM("claude-haiku-4-5-20251001")  # cliente real do SDK, sem chave
+
+    with pytest.raises(ErroGeracao) as erro:
+        llm.gerar("s", "p", Saida)
+
+    assert erro.value.status == "erro_api"
+    assert "ANTHROPIC_API_KEY" in erro.value.mensagem
+
+
 def test_custo_usa_o_preco_do_modelo_e_aceita_id_com_data():
     assert custo_usd("claude-haiku-4-5-20251001", 1_000_000, 0) == Decimal("1.000000")
     assert custo_usd("claude-haiku-4-5", 4000, 600) == Decimal("0.007000")
