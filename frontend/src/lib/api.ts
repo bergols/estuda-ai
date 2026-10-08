@@ -1,6 +1,8 @@
 import createClient, { type Middleware } from "openapi-fetch";
 
 import type { components, paths } from "./api-schema";
+import { fetchPelaPonte } from "./desktop";
+import { DESKTOP } from "./plataforma";
 
 /**
  * Cliente tipado da API, gerado do OpenAPI do backend (npm run tipos). Caminhos,
@@ -8,6 +10,8 @@ import type { components, paths } from "./api-schema";
  * ou um campo, o build do frontend quebra em vez de o erro aparecer só em produção.
  *
  * Tudo passa pelo BFF (/api/...), que acrescenta o JWT a partir do cookie httpOnly.
+ * No app desktop, o mesmo cliente usa a ponte para o Rust (lib/desktop.ts), que
+ * acrescenta o JWT guardado no cofre do sistema.
  */
 export type Esquemas = components["schemas"];
 
@@ -32,7 +36,10 @@ const sessaoExpirada: Middleware = {
   },
 };
 
-export const api = createClient<paths>({ baseUrl: "/api" });
+export const api = createClient<paths>({
+  baseUrl: "/api",
+  fetch: DESKTOP ? fetchPelaPonte : undefined,
+});
 api.use(sessaoExpirada);
 
 /** A API devolve {"detail": "mensagem"} (ou a lista de erros de validação). */

@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "dev:desktop": "node scripts/alvo-desktop.mjs dev -p 3001",
+    "build:desktop": "node scripts/alvo-desktop.mjs build",
     "start": "next start",
     "lint": "eslint",
     "tipos": "openapi-typescript openapi.json --default-non-nullable false -o src/lib/api-schema.d.ts",
@@ -13,6 +15,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",
+    "@tauri-apps/api": "2.12.1",
     "katex": "^0.19.0",
     "next": "16.4.0",
     "openapi-fetch": "^0.17.0",

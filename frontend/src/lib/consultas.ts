@@ -3,6 +3,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, dados, type Esquemas } from "./api";
+import { sairPelaPonte } from "./desktop";
+import { DESKTOP } from "./plataforma";
 
 /**
  * Chaves do cache do TanStack Query. Hierárquicas: invalidar ["disciplinas", id]
@@ -269,8 +271,9 @@ export function useGastos() {
   return useQuery({ queryKey: chaves.gastos, queryFn: () => dados(api.GET("/gastos")) });
 }
 
-/** Sair deste aparelho: o BFF apaga o cookie. */
+/** Sair deste aparelho: o BFF apaga o cookie (no desktop, o Rust apaga o token do cofre). */
 async function apagarCookie() {
+  if (DESKTOP) return sairPelaPonte();
   await fetch("/api/sessao", { method: "DELETE" });
 }
 

@@ -5,6 +5,8 @@ import { useState, type FormEvent } from "react";
 
 import { Botao, Campo, Erro } from "@/components/ui";
 import { ErroApi } from "@/lib/api";
+import { entrarPelaPonte } from "@/lib/desktop";
+import { DESKTOP } from "@/lib/plataforma";
 
 export function FormularioLogin() {
   const router = useRouter();
@@ -17,12 +19,17 @@ export function FormularioLogin() {
     setEnviando(true);
     setErro(null);
     try {
-      // Vai para o BFF (/api/sessao), que grava o cookie httpOnly. O token não volta.
-      const resposta = await fetch("/api/sessao", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.get("email"), senha: form.get("senha") }),
-      });
+      const email = String(form.get("email"));
+      const senha = String(form.get("senha"));
+      // Web: o BFF (/api/sessao) grava o cookie httpOnly. Desktop: o Rust guarda o
+      // token no cofre do sistema. Nos dois, o token não volta para a página.
+      const resposta = DESKTOP
+        ? await entrarPelaPonte(email, senha)
+        : await fetch("/api/sessao", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, senha }),
+          });
       if (!resposta.ok) {
         const corpo = await resposta.json().catch(() => ({}));
         const retry = Number(resposta.headers.get("retry-after")) || undefined;
