@@ -133,9 +133,48 @@ ssh-keygen -t ed25519 -f ~/.ssh/oracle_estuda_ai -C "estuda-ai oracle"
 - **Add SSH keys:** "Paste public keys" e cole a saída de `cat ~/.ssh/oracle_estuda_ai.pub`;
 - **Boot volume:** o padrão (~50 GB).
 
-Em **Create**, se aparecer *Out of capacity for shape*, troque o *Availability domain*
-(AD-1, AD-2...) ou tente mais tarde. Quando a VM estiver *Running*, anote o **Public IP
-address**.
+Em **Create**, se aparecer *Out of capacity for shape*: a Oracle não tem VM ARM livre na
+região naquele momento. São Paulo tem um *availability domain* só, então trocar de AD não
+resolve. Ou você tenta mais tarde, ou deixa um script tentando sozinho (abaixo). Quando a
+VM estiver *Running*, anote o **Public IP address**.
+
+**A3b. (Se der "Out of capacity") Criar a VM por script, tentando até conseguir.** A
+capacidade abre quando outras pessoas apagam VMs, a qualquer hora.
+`deploy/oracle-criar-vm.sh` usa a OCI CLI para tentar a cada ~90 s e avisa com uma
+notificação do macOS quando consegue.
+
+- Ele descobre sozinho a rede, a subnet pública e a imagem Ubuntu 24.04 ARM.
+- Cria sempre 1 OCPU e 4 GB (fixo no código, para nenhum engano criar algo pago).
+- Nunca cria duas VMs.
+
+Antes de usar, é preciso configurar a OCI CLI:
+
+1. Instale: `brew install oci-cli`.
+2. No console: ícone do perfil (canto superior direito) → **My profile** → **API keys** →
+   **Add API key** → **Generate API key pair** → **Download private key** → **Add**.
+3. Copie o texto de **Configuration file preview** que aparece.
+4. No Mac, guarde a chave privada baixada e crie a configuração:
+
+   ```bash
+   mkdir -p ~/.oci && mv ~/Downloads/*.pem ~/.oci/oci_api_key.pem && chmod 600 ~/.oci/oci_api_key.pem
+   ```
+
+   ```bash
+   nano ~/.oci/config
+   ```
+
+   Cole o *Configuration file preview* e troque a linha `key_file=...` por
+   `key_file=~/.oci/oci_api_key.pem`. Salve (Ctrl+O, Enter, Ctrl+X) e rode
+   `chmod 600 ~/.oci/config`.
+5. Teste: `oci iam region list --output table` deve listar as regiões.
+6. Rode, com o Mac na tomada e a tampa aberta:
+
+   ```bash
+   caffeinate -i deploy/oracle-criar-vm.sh
+   ```
+
+A chave `.pem` dá acesso à sua conta Oracle: ela fica só em `~/.oci`, nunca no repositório
+nem no chat.
 
 **A4. Liberar 80 e 443 na rede da Oracle.** Na página da VM → a *Subnet* → *Security
 Lists* → *Default Security List* → **Add Ingress Rules**:
