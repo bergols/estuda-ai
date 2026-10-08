@@ -11,7 +11,7 @@ Cada aluno tem 4 disciplinas x 5 tópicos e, dia a dia, no fuso de São Paulo:
 - faltas (mais no fim de semana): os vencidos acumulam ATRASO;
 - cards novos entrando aos poucos, cada lote vindo de uma GERAÇÃO de IA simulada
   (tabela geracoes, com tokens e custo; algumas falham);
-- até 80 revisões por dia com notas sorteadas pela dificuldade do tópico, pelo
+- de 30 a 100 revisões por dia (sorteado) com notas sorteadas pela dificuldade do tópico, pelo
   atraso, pela maturidade do card e pela habilidade do aluno, e o SM-2 da API;
 - questões de múltipla escolha (criadas por uma geração no 1o dia) respondidas
   com um distrator "mais tentador";
@@ -59,7 +59,7 @@ CARDS_POR_TOPICO = 24
 QUESTOES_POR_TOPICO = 3
 TRECHOS_POR_MATERIAL = 4
 NOVOS_POR_DIA = 12
-LIMITE_DIARIO = 80
+LIMITE_DIARIO = (30, 100)  # revisões por dia: sorteado a cada dia
 
 
 @dataclass
@@ -208,7 +208,9 @@ def simular(dias: int, rng: random.Random, habilidade: float) -> Simulacao:
 
         fim_do_dia = momento_local(dia + timedelta(days=1), 0)
         vencidos = sorted((c for c in ativos if c.proxima < fim_do_dia), key=lambda c: c.proxima)
-        for card in vencidos[:LIMITE_DIARIO]:
+        # Quanto o aluno aguenta revisar hoje varia de dia para dia (um limite fixo
+        # deixaria quase todos os dias iguais e o calendário sem contraste).
+        for card in vencidos[:rng.randint(*LIMITE_DIARIO)]:
             agora += timedelta(seconds=rng.randint(15, 90))
             nota = sortear_nota(rng, card, agora, habilidade)
             novo = calcular(card.estado, nota)

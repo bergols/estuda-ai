@@ -286,3 +286,104 @@ class ResultadoRevisaoSaida(BaseModel):
     proxima_revisao: datetime
     versao: int
     historico_id: int
+
+
+# ------------------------------------------------------------------ fase 5
+
+
+class AcertoSemanal(BaseModel):
+    semana: date  # segunda-feira (fuso do usuário)
+    disciplina_id: int
+    grupo: str  # nome da disciplina ou título do material
+    fonte: Literal["revisao", "questao", "total"]
+    respostas: int
+    acertos: int
+    taxa: Decimal | None  # None = semana sem respostas
+
+
+class EvolucaoDia(BaseModel):
+    dia: date
+    respostas: int
+    acertos: int
+    taxa: Decimal | None
+    respostas_7d: int
+    taxa_media_7d: Decimal | None
+
+
+class EvolucaoSemana(BaseModel):
+    semana: date
+    respostas: int
+    acertos: int
+    taxa: Decimal | None
+    taxa_semana_anterior: Decimal | None
+    variacao_pp: Decimal | None  # pontos percentuais
+    variacao_respostas: int | None
+
+
+class CardDificil(BaseModel):
+    disciplina_id: int
+    disciplina: str
+    posicao: int  # DENSE_RANK
+    posicao_rank: int  # RANK (para comparar)
+    flashcard_id: int
+    frente: str
+    topico: str | None
+    revisoes: int
+    erros: int
+    taxa_erro: Decimal
+    facilidade: Decimal
+
+
+class Sequencia(BaseModel):
+    hoje: date
+    atual_dias: int
+    atual_inicio: date | None
+    atual_fim: date | None
+    estudou_hoje: bool
+    maior_dias: int
+    maior_inicio: date | None
+    maior_fim: date | None
+    dias_estudados: int
+
+
+class PrevisaoDia(BaseModel):
+    dia: date
+    cards: int
+    atrasados: int  # só no primeiro dia: vencidos antes de hoje
+
+
+class DiaCalendario(BaseModel):
+    dia: date
+    dia_semana: int  # 1 = segunda ... 7 = domingo
+    revisoes: int
+    nivel: int  # 0 a 4 (quartis dos dias com atividade)
+
+
+class CustoMensal(BaseModel):
+    mes: date
+    tipo: str
+    geracoes: int
+    falhas: int
+    tokens_entrada: int
+    tokens_saida: int
+    custo_usd: Decimal
+    acumulado_tipo: Decimal
+    acumulado_total: Decimal
+
+
+class Serie[T](BaseModel):
+    """Resposta padrão: o período usado e os dados prontos para plotar.
+
+    atualizado_em vem preenchido quando os dados saem da materialized view:
+    é o instante do último REFRESH (revisões feitas depois não aparecem ainda).
+    """
+
+    de: date | None = None
+    ate: date | None = None
+    atualizado_em: datetime | None = None
+    dados: list[T]
+
+
+class AtualizacaoMVSaida(BaseModel):
+    atualizado_em: datetime
+    duracao_ms: int

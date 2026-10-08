@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_session
 from app.routers import (
+    analytics,
     busca,
     disciplinas,
     flashcards,
@@ -29,6 +30,7 @@ app.include_router(flashcards.router)
 app.include_router(questoes.router)
 app.include_router(gastos.router)
 app.include_router(revisoes.router)
+app.include_router(analytics.router)
 
 
 @app.get("/health")
