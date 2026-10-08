@@ -1,23 +1,13 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { caminhoDaApi, caminhoPermitido } from "@/lib/bff";
 import { COOKIE_SESSAO, cabecalhosDoBff, origemConfiavel, urlDaApi } from "@/lib/sessao";
 
 /**
  * Repassa /api/<caminho> para a API, com o JWT do cookie em "Authorization".
- *
- * Só caminhos da allowlist passam: o BFF não é um proxy aberto para qualquer rota da
- * API (nem para outro host). /auth/login tem rota própria (/api/sessao), que grava o
- * cookie; aqui ele não está na lista.
+ * Regras (allowlist, CSRF, IP) em lib/bff.ts, com testes em lib/bff.test.ts.
  */
-const PERMITIDOS = new Set(["disciplinas", "revisoes", "analytics", "gastos"]);
-const AUTH_PERMITIDOS = new Set(["eu", "sair-de-todos"]);
-
-function caminhoPermitido(partes: string[]): boolean {
-  const [primeiro, segundo] = partes;
-  if (primeiro === "auth") return partes.length === 2 && AUTH_PERMITIDOS.has(segundo);
-  return PERMITIDOS.has(primeiro);
-}
 
 async function repassar(request: NextRequest, ctx: RouteContext<"/api/[...caminho]">) {
   const { caminho } = await ctx.params;
@@ -32,9 +22,7 @@ async function repassar(request: NextRequest, ctx: RouteContext<"/api/[...caminh
     return NextResponse.json({ detail: "sessão expirada" }, { status: 401 });
   }
 
-  // Cada parte é recodificada: um "%2F" ou ".." dentro de um segmento não vira
-  // separador de caminho na URL da API.
-  const url = urlDaApi(caminho.map(encodeURIComponent).join("/"));
+  const url = urlDaApi(caminhoDaApi(caminho));
   url.search = request.nextUrl.search;
 
   const cabecalhos: Record<string, string> = {

@@ -1,6 +1,6 @@
 # Integração contínua: roda a cada push e pull request.
 #   backend   -> lint (ruff) + migrations + alembic check + testes contra Postgres+pgvector
-#   frontend  -> tipos gerados do OpenAPI em dia, lint, typecheck e build do Next.js
+#   frontend  -> tipos gerados do OpenAPI em dia, lint, typecheck, testes e build do Next.js
 #   segredos  -> gitleaks no histórico INTEIRO do git (não só no último commit)
 name: CI
 
@@ -121,6 +121,10 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      # Regras de segurança do BFF (allowlist, CSRF, IP) como funções puras
+      - name: Testes
+        run: npm test
 
       # O build não chama a API (as páginas buscam dados no navegador), mas o
       # servidor do Next valida a configuração: BACKEND_URL só precisa existir.

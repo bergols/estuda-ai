@@ -1,5 +1,7 @@
 import "server-only";
 
+import { ipDoCliente, origemConfiavel as origemPermitida } from "./bff";
+
 /**
  * Sessão no servidor do Next (BFF, "backend for frontend").
  *
@@ -24,9 +26,7 @@ export function urlDaApi(caminho: string): URL {
 export function cabecalhosDoBff(request: Request): Record<string, string> {
   const cabecalhos: Record<string, string> = {};
   const segredo = process.env.BFF_SEGREDO;
-  // x-forwarded-for: "cliente, proxy1, proxy2". O 1o é o cliente, escrito pela
-  // plataforma de hospedagem na borda (um valor enviado pelo navegador é substituído).
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = ipDoCliente(request.headers.get("x-forwarded-for"));
   if (segredo && ip) {
     cabecalhos["X-BFF-Segredo"] = segredo;
     cabecalhos["X-Cliente-IP"] = ip;
@@ -47,12 +47,7 @@ export function opcoesDoCookie(expiraEm: Date) {
   };
 }
 
-/**
- * Defesa extra contra CSRF, além do SameSite: navegadores modernos mandam
- * Sec-Fetch-Site em toda requisição. Mutação vinda de outro site é recusada.
- */
+/** CSRF: ver origemConfiavel em bff.ts. */
 export function origemConfiavel(request: Request): boolean {
-  if (["GET", "HEAD"].includes(request.method)) return true;
-  const site = request.headers.get("sec-fetch-site");
-  return site === null || site === "same-origin";
+  return origemPermitida(request.method, request.headers.get("sec-fetch-site"));
 }
