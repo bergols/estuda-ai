@@ -472,3 +472,119 @@ estudante com `respondida_em` 2 segundos depois da original. Depois:
 ```sql
 
 ```
+
+## Fase 6 — Segurança, privilégios, operação e backup
+
+Conceitos em [`seguranca.md`](seguranca.md), [`frontend.md`](frontend.md) e
+[`deploy.md`](deploy.md). Faça no banco de **desenvolvimento** (nunca no de produção),
+conectado como dono (`docker compose exec db psql -U estuda_ai -d estuda_ai`) e trocando
+de papel com `SET ROLE estuda_ai_app;` / `RESET ROLE;` quando o exercício pedir.
+
+### 6.1 O que o papel da aplicação consegue fazer
+
+Com `SET ROLE estuda_ai_app;`, tente (e explique cada resultado):
+
+- (a) `UPDATE geracoes SET custo_usd = 0;` e `DELETE FROM historico_revisoes;`;
+- (b) `DELETE FROM disciplinas WHERE id = <uma sua>;` dentro de `BEGIN; ... ROLLBACK;`. O
+  histórico de revisões dos cards dela some junto, mesmo o papel não tendo `DELETE` em
+  `historico_revisoes`. Por quê? Mostre no catálogo (`pg_constraint`, coluna `confdeltype`)
+  qual FK faz isso;
+- (c) escreva UMA consulta no catálogo que liste, para cada tabela do schema `public`,
+  quais privilégios o `estuda_ai_app` tem, no formato `tabela | SELECT, INSERT, ...`
+  (dica: `has_table_privilege` + `string_agg`). Compare com `\dp` no psql.
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 6.2 SECURITY DEFINER e search_path
+
+- (a) Ainda como `estuda_ai_app`, rode `REFRESH MATERIALIZED VIEW mv_respostas_diarias;` e
+  depois `SELECT * FROM atualizar_mv_respostas_diarias();`. Por que um falha e o outro não?
+- (b) Crie (como dono, num banco de teste) uma função `SECURITY DEFINER` **sem**
+  `SET search_path` que faça `SELECT count(*) FROM geracoes`. Mostre como um papel que pode
+  criar tabelas temporárias consegue fazer a função ler outra tabela `geracoes` (dica:
+  `CREATE TEMP TABLE geracoes ...` e a posição de `pg_temp` no search_path). Depois
+  conserte com `SET search_path = pg_catalog, public, pg_temp`;
+- (c) por que, além do `search_path`, é preciso `REVOKE EXECUTE ... FROM PUBLIC`?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 6.3 Rate limit: janela fixa x janela deslizante
+
+A tabela `limites_taxa` implementa janela fixa com `date_bin`.
+
+- (a) Mostre, com `INSERT`s em horários escolhidos, como um cliente consegue fazer quase
+  o **dobro** do limite em poucos segundos ao redor da virada da janela;
+- (b) escreva uma janela **deslizante** em SQL: uma tabela `tentativas_login(chave,
+  momento)` e uma consulta que conte as tentativas nos últimos 15 minutos para uma chave.
+  Que índice ela precisa? Como você limparia as linhas velhas?
+- (c) compare as duas em custo de escrita, tamanho da tabela e precisão. Por que a
+  aplicação aceitou a janela fixa?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 6.4 UPSERT e concorrência
+
+- (a) Em duas sessões do psql, com `BEGIN;` em ambas, rode o mesmo
+  `INSERT ... ON CONFLICT (chave, janela_inicio) DO UPDATE SET contagem = contagem + 1
+  RETURNING contagem` na mesma chave. O que a segunda sessão faz até a primeira dar
+  `COMMIT`? Qual o valor final? Use `pg_locks` para ver a espera;
+- (b) reescreva o contador como "`SELECT` e depois `UPDATE` ou `INSERT`" (sem
+  `ON CONFLICT`) e mostre, com as duas sessões, a atualização perdida (ou o erro de
+  chave duplicada);
+- (c) por que a tabela pode ser `UNLOGGED` e a `geracoes` (a cota diária) não pode?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 6.5 Backup, restore e o que um dump não leva
+
+- (a) Rode `deploy/backup.sh` (ou um `pg_dump --format=custom` à mão) e liste o conteúdo
+  com `pg_restore --list`. Em que ordem aparecem tabelas, dados, índices e constraints? Por
+  que essa ordem acelera o restore?
+- (b) Restaure o dump num banco **novo** (`CREATE DATABASE restore_teste;`) com
+  `pg_restore -d restore_teste`. Que erros aparecem se o papel `estuda_ai_app` não existir
+  no servidor? Por que o `pg_dump` não leva papéis (e qual ferramenta leva)?
+- (c) Confira que o restore está inteiro: compare a contagem de linhas de cada tabela entre
+  os dois bancos com uma consulta só (dica: `pg_stat_user_tables.n_live_tup` engana; por quê?
+  Use `count(*)`).
+- (d) O backup diário perde até 24 h de dados se a VM sumir às 03:59. Explique como o
+  arquivamento contínuo do WAL (`archive_mode`, `pg_basebackup`) reduziria isso para
+  minutos, e o que é PITR (*point-in-time recovery*).
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 6.6 SQL injection e o operador LIKE
+
+- (a) Monte, com `PREPARE busca(text) AS SELECT ... WHERE email ILIKE $1;`, um exemplo em
+  que o valor vem como parâmetro (sem injection nenhuma) e mesmo assim casa com todas as
+  contas. Por que bind parameter não impede isso?
+- (b) Escreva uma busca por **prefixo** de título de material que seja segura com entrada
+  do usuário: escape `%`, `_` e `\` antes do `LIKE` (função `replace` ou `ESCAPE`) e mostre
+  que `50%` encontra só títulos que começam com "50%";
+- (c) que índice faz `WHERE lower(titulo) LIKE 'abc%'` usar índice no Postgres
+  (dica: `text_pattern_ops` ou collation "C")? Prove com `EXPLAIN`.
+
+**Minha resposta:**
+
+```sql
+
+```

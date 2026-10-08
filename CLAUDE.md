@@ -12,7 +12,8 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
   `geracao-llm.md` para LLM/RAG/auditoria, `repeticao-espacada.md` para SM-2/fila/
   concorrência/fuso, `analytics.md` para as consultas analíticas, `seguranca.md` para
   auth/isolamento/injection/rate limit/privilégios/CI, `frontend.md` para BFF/cookies/
-  contrato tipado/TanStack Query/gráficos), diga o
+  contrato tipado/TanStack Query/gráficos, `deploy.md` para hospedagem/backup/operação),
+  diga o
   *porquê* (alternativas consideradas, custo/benefício), não só o quê. Didático,
   em português.
 - **Commits pequenos, Conventional Commits em português** (`feat:`, `fix:`, `docs:`,
@@ -27,11 +28,10 @@ Fases 1 (fundação + modelagem), 2 (upload de PDF, embeddings, busca semântica
 híbrida, experimento HNSW), 3 (RAG com a API da Anthropic: perguntar, flashcards,
 questões, tentativas, auditoria de custos), 4 (SM-2, fila do dia, concorrência, fuso) e 5
 (analytics com SQL avançado, views e materialized view) concluídas. Fase 6 em 3 sessões:
-(1) segurança + CI e (2) frontend Next.js (BFF com cookie httpOnly, todas as telas,
-painel com Recharts, job do frontend no CI) **concluídas**; (3) deploy (apresentar 2-3
-opções de hospedagem ao autor e só fazer depois que ele escolher; ver se a plataforma
-escreve `X-Forwarded-For` de forma confiável para o BFF), backup com `pg_dump`, diagrama
-Mermaid no README, exercícios da fase 6. Roadmap no `README.md`.
+(1) segurança + CI, (2) frontend Next.js e (3) deploy **concluídas**. Produção: VM
+Oracle Always Free (ARM, São Paulo, 1 OCPU/4 GB: a memória precisa ficar acima de 20% para a VM não ser "ociosa") escolhida pelo autor ("grátis, só para
+eu usar"), com `docker-compose.prod.yml`. A criação da conta/VM/domínio é tarefa manual
+do autor (`docs/deploy.md`, seção 4). Roadmap no `README.md`.
 Pendente da fase 3: o teste real com a API (falta `ANTHROPIC_API_KEY` no `.env`). Exercícios de SQL por fase em `docs/exercicios.md` (sem respostas; o autor
 preenche "Minha resposta:").
 
@@ -182,6 +182,25 @@ Detalhes e o porquê em `docs/frontend.md`.
 - Gráficos (`src/components/graficos.tsx`): forma pelo trabalho do dado, um eixo, marcas
   finas, tabela equivalente em toda figura; cores `--grafico-destaque/--grafico-contexto`
   validadas (claro e escuro) com o validador da skill de dataviz.
+
+## Produção (fase 6)
+
+Detalhes em `docs/deploy.md`.
+
+- `docker-compose.prod.yml` (projeto `estuda-ai-prod`): só o Caddy publica portas;
+  redes `dados` (interna, db↔backend), `app` (backend↔frontend) e `borda`
+  (frontend↔caddy). Serviço novo entra só nas redes de que precisa; nada de `ports` além
+  do Caddy. O frontend recebe só `BACKEND_URL` e `BFF_SEGREDO`.
+- Backend em produção: `UV_SYNC_ARGS=--no-dev`, `user: 10001` (pastas dos volumes criadas
+  com esse dono no Dockerfile), CMD do Dockerfile (migrations → papel_app → uvicorn).
+- `.env` de produção só nasce no servidor (`deploy/gerar-env.sh`, segredos via openssl,
+  chmod 600); nunca pedir nem escrever segredos no chat.
+- Backup: `deploy/backup.sh` (cron 04:00 UTC, `pg_dump -Fc` + tar dos PDFs, 14 dias);
+  restore: `deploy/restaurar.sh` (cria o papel antes; `--clean --if-exists
+  --single-transaction`). Mudou volume ou nome de projeto? Ajuste os dois scripts.
+- Antes de mexer no deploy, teste a pilha de produção no Mac (ARM como a VM) numa cópia
+  em `~/` (o Colima só monta a home), com `PORTA_HTTP=8080 PORTA_HTTPS=8443` e
+  `DOMINIO=localhost`.
 
 ## Analytics (fase 5)
 

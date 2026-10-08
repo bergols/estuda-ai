@@ -10,8 +10,32 @@ desempenho por disciplina e tópico.
 banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/modelagem.md),
 [busca semântica](docs/busca-semantica.md), [geração com LLM](docs/geracao-llm.md),
 [repetição espaçada](docs/repeticao-espacada.md), [analytics](docs/analytics.md),
-[segurança](docs/seguranca.md), [frontend](docs/frontend.md) e
+[segurança](docs/seguranca.md), [frontend](docs/frontend.md), [deploy](docs/deploy.md) e
 [exercícios de SQL](docs/exercicios.md).
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    U["Navegador / celular"] -- HTTPS --> C["Caddy<br/>(HTTPS, única porta aberta)"]
+    C --> N["Next.js<br/>telas + BFF<br/>(cookie httpOnly)"]
+    N -- "Bearer JWT + IP do cliente<br/>(rede interna)" --> B["FastAPI<br/>papel estuda_ai_app"]
+    B -- "SQL (bind parameters)" --> P[("PostgreSQL 16<br/>pgvector · HNSW · GIN<br/>MV de analytics")]
+    B -- "embeddings locais" --> E["e5-small<br/>(384 dim)"]
+    B -- "RAG: trechos rotulados" --> A["API da Anthropic<br/>(Claude Haiku)"]
+    B --- F[("PDFs<br/>volume uploads")]
+    M["migrations (Alembic)<br/>papel dono"] -.-> P
+    K["backup diário<br/>pg_dump"] -.-> P
+```
+
+- **O navegador nunca fala com a API:** o Next guarda o JWT num cookie `httpOnly` e repassa
+  as chamadas por uma allowlist ([frontend](docs/frontend.md)).
+- **Dois papéis no Postgres:** a API só lê e escreve dados (`estuda_ai_app`); só as
+  migrations mudam o schema ([segurança](docs/seguranca.md), seção 6).
+- **Busca:** semântica (pgvector + HNSW), textual (tsvector + GIN) e híbrida (RRF), sempre
+  filtrada pela disciplina do usuário.
+- **Em produção:** uma VM grátis da Oracle (São Paulo), o mesmo `docker compose`, API e
+  banco sem porta exposta ([deploy](docs/deploy.md)).
 
 ## Stack
 
@@ -24,7 +48,7 @@ banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/mode
 | LLM | API da Anthropic (SDK `anthropic`), padrão Claude Haiku 4.5, saída estruturada validada com Pydantic |
 | Frontend | Next.js 16 + TypeScript + Tailwind, TanStack Query, Recharts; BFF com cookie httpOnly |
 | Autenticação | argon2id (senhas) + JWT; papel do banco com menor privilégio |
-| Infra | Docker Compose, GitHub Actions (testes + gitleaks) |
+| Infra | Docker Compose, Caddy (HTTPS), GitHub Actions (testes + gitleaks); produção numa VM Oracle Always Free |
 | Testes | pytest contra Postgres real |
 
 ## Como rodar
@@ -282,11 +306,53 @@ docker compose exec backend python -m scripts.seed_revisoes --alunos 200
 docker compose exec backend python -m scripts.experimento_analytics
 ```
 
+## Deploy
+
+Produção numa VM grátis da Oracle Cloud (ARM, região São Paulo), com
+`docker-compose.prod.yml`: Caddy (HTTPS automático) → Next → API → Postgres, com só as
+portas 80/443 abertas. O passo a passo completo (conta, VM, domínio, chave de deploy,
+segredos gerados no servidor) está em [docs/deploy.md](docs/deploy.md). Em resumo, já na
+VM:
+
+```bash
+sudo deploy/preparar-servidor.sh
+```
+
+```bash
+deploy/gerar-env.sh seu-nome.duckdns.org
+```
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Atualizar depois de um push: `deploy/atualizar.sh` (faz backup antes).
+
+### Backup e restore
+
+O cron roda `deploy/backup.sh` todo dia: `pg_dump --format=custom` do banco e um `.tar.gz`
+dos PDFs em `~/backups`, com 14 dias de retenção. Puxe as cópias para fora da VM:
+
+```bash
+rsync -av -e "ssh -i ~/.ssh/oracle_estuda_ai" ubuntu@IP_DA_VM:backups/ ~/estuda-ai-backups/
+```
+
+Restaurar (substitui o banco atual; pede confirmação):
+
+```bash
+deploy/restaurar.sh ~/backups/banco_AAAAMMDDTHHMMSSZ.dump ~/backups/uploads_AAAAMMDDTHHMMSSZ.tar.gz
+```
+
+O porquê de cada passo (foto consistente do `pg_dump`, papéis que o dump não leva, restore
+tudo-ou-nada, RPO de 24 h e PITR) está em [docs/deploy.md](docs/deploy.md).
+
 ## Estrutura
 
 ```
 estuda-ai/
-├── docker-compose.yml
+├── docker-compose.yml       # desenvolvimento
+├── docker-compose.prod.yml  # produção: Caddy + Next + API + Postgres, 3 redes
+├── deploy/                  # Caddyfile, preparar-servidor, gerar-env, backup, restaurar, atualizar
 ├── .github/workflows/ci.yml # lint + testes (Postgres+pgvector) + gitleaks
 ├── .gitleaks.toml           # exceções (estreitas) da varredura de segredos
 ├── backend/
@@ -307,6 +373,8 @@ estuda-ai/
 │   ├── repeticao-espacada.md # SM-2, estado x histórico, fila, concorrência, fuso
 │   ├── analytics.md         # views, window functions, gaps-and-islands, EXPLAIN
 │   ├── seguranca.md         # argon2id, JWT, isolamento, SQL injection, rate limit, privilégios
+│   ├── frontend.md          # BFF, cookie httpOnly, contrato tipado, TanStack Query, gráficos
+│   ├── deploy.md            # hospedagem, passo a passo, backup/restore, operação
 │   ├── exercicios.md        # exercícios de SQL por fase
 │   └── experimentos/        # resultados gerados por script
 └── frontend/
@@ -339,7 +407,7 @@ estuda-ai/
 - [x] **Fase 5: analytics.** Endpoints com SQL analítico explícito (GROUPING SETS, window
   functions, LAG, DENSE_RANK, gaps-and-islands, generate_series, percentile_cont), VIEW e
   MATERIALIZED VIEW com REFRESH CONCURRENTLY, e otimização provada com EXPLAIN ANALYZE.
-- [ ] **Fase 6: frontend, segurança e deploy.**
+- [x] **Fase 6: frontend, segurança e deploy.**
   - [x] Segurança e CI: login com argon2id + JWT (30 dias, "sair de todos"), sem cadastro
     público, testes de isolamento entre usuários em toda rota, auditoria de SQL injection,
     rate limit e cota diária de IA no Postgres, papel do banco com menor privilégio,
@@ -347,4 +415,6 @@ estuda-ai/
   - [x] Frontend Next.js: login (cookie httpOnly via BFF), disciplinas, upload com status,
     busca, perguntar com fontes, flashcards, questões, revisão do dia, painel com Recharts e
     conta; celular e modo escuro; tipos gerados do OpenAPI; job do frontend no CI.
-  - [ ] Deploy, backup com `pg_dump` e diagrama de arquitetura.
+  - [x] Deploy: `docker-compose.prod.yml` (Caddy com HTTPS, API e banco sem porta exposta,
+    3 redes, backend sem root), scripts de servidor, backup diário com `pg_dump` + restore
+    testado num servidor novo, diagrama de arquitetura. Destino: VM Oracle Always Free.
