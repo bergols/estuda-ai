@@ -7,8 +7,9 @@
 #
 # Como disparar:
 #   - Release:  git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
-#     (a tag precisa bater com "version" em desktop/src-tauri/tauri.conf.json) → cria
-#     uma Release em RASCUNHO com os instaladores; você confere e publica.
+#     (a tag precisa bater com "version" em desktop/src-tauri/tauri.conf.json) → os
+#     builds geram os instaladores e o job "release" cria uma Release em RASCUNHO com
+#     eles; você confere e publica.
 #   - Só testar o build: aba Actions → "Desktop" → "Run workflow" → os instaladores
 #     ficam como artefatos da execução (sem Release).
 name: Desktop
@@ -18,9 +19,9 @@ on:
     tags: ["desktop-v*"]
   workflow_dispatch:
 
-# Criar a Release e subir os arquivos exige escrita no repositório (só neste workflow).
+# Os builds só leem o repositório; quem escreve (cria a Release) é o job "release".
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: desktop-${{ github.ref }}
@@ -90,19 +91,52 @@ jobs:
         working-directory: desktop
         run: cargo test --workspace
 
+      # Só build + artefatos. A Release é criada UMA vez, no job abaixo: na primeira
+      # versão, cada sistema tentava criar a sua (corrida entre os dois) e o tauri-action
+      # recebeu 403 do GitHub mesmo com contents: write (ver docs/modo-foco.md, seção 5).
       - name: Build e instaladores
         uses: tauri-apps/tauri-action@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # só leitura neste job
         with:
           projectPath: desktop
           args: ${{ matrix.args }}
-          # Com tag: cria/atualiza a Release em rascunho. Sem tag: só artefatos.
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('estuda-ai {0}', github.ref_name) || '' }}
-          releaseBody: >-
-            Instaladores sem assinatura de código paga. Na primeira vez, o Windows
-            (SmartScreen) e o macOS (Gatekeeper) avisam: veja como abrir em
-            docs/modo-foco.md, seção "Instalar sem assinatura".
-          releaseDraft: true
           uploadWorkflowArtifacts: true
+
+  release:
+    needs: instaladores
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04 # 1 min de Linux, em vez de repetir em cada sistema
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artefatos
+
+      - name: Release em rascunho com os instaladores e o SHA-256 de cada um
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir instaladores
+          find artefatos -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \) \
+            -exec cp {} instaladores/ \;
+          cd instaladores
+          ls -la
+          {
+            echo "Instaladores sem assinatura de código paga. Na primeira vez, o macOS"
+            echo "(Gatekeeper) e o Windows (SmartScreen) avisam: como abrir em"
+            echo "docs/modo-foco.md, seção 6. No Windows, prefira o -setup.exe."
+            echo
+            echo "SHA-256:"
+            echo '```'
+            sha256sum *
+            echo '```'
+          } > ../notas.md
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --draft \
+              --verify-tag --title "estuda-ai ${GITHUB_REF_NAME#desktop-v}" --notes-file ../notas.md
+          fi

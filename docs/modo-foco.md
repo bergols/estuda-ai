@@ -176,6 +176,23 @@ O workflow `.github/workflows/desktop.yml` monta os dois numa matriz (macOS + Wi
 - **botão "Run workflow"** (aba Actions → Desktop): só gera os instaladores como
   artefatos da execução.
 
+Os builds só geram artefatos. Quem cria a Release é um job final em Linux (`release`),
+que junta os instaladores dos dois sistemas e calcula o SHA-256 de cada um. Na primeira
+versão (0.1.0), cada sistema criava a Release pelo `tauri-action` e os dois receberam
+`403 Resource not accessible by integration`, mesmo com `contents: write` no token. Os
+instaladores tinham sido gerados, então a Release foi montada à mão com eles. Com um job
+só criando a Release, não há mais corrida entre os dois sistemas, e uma falha de
+permissão custa 1 minuto de Linux, não um build inteiro. Se acontecer de novo, o contorno
+é o mesmo daquela vez, com a sua conta:
+
+```bash
+gh run download <id da execução> -R bergols/estuda-ai -D instaladores
+```
+
+```bash
+gh release create desktop-v<versão> instaladores/*/*.dmg instaladores/*/*-setup.exe instaladores/*/*.msi -R bergols/estuda-ai --draft --verify-tag
+```
+
 **Por que não a cada push?** O repositório é privado. No plano grátis, o GitHub dá
 2.000 minutos por mês, mas um minuto de macOS conta como 10 e um de Windows como 2. Um
 build universal do Mac leva cerca de 15 minutos no CI (~150 da cota). Por isso, a cada
