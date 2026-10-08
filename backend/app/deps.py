@@ -1,8 +1,10 @@
+import hmac
+import ipaddress
 from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -87,6 +89,30 @@ def disciplina_do_usuario(
 
 
 DisciplinaDoUsuario = Annotated[Disciplina, Depends(disciplina_do_usuario)]
+
+
+def ip_do_cliente(request: Request, settings: SettingsDep) -> str:
+    """IP usado no rate limit de login.
+
+    Headers como X-Forwarded-For são escritos por quem faz a requisição: confiar neles
+    sem conferir a origem deixa qualquer um "trocar de IP" a cada tentativa. Aqui só o
+    BFF (o servidor do Next.js) é confiável, e ele prova quem é com X-BFF-Segredo.
+    hmac.compare_digest compara em tempo constante (não vaza, pelo tempo, quantos
+    caracteres do segredo acertaram).
+    """
+    direto = request.client.host if request.client else "desconhecido"
+    if settings.bff_segredo is None:
+        return direto
+    enviado = request.headers.get("x-bff-segredo", "")
+    if not hmac.compare_digest(enviado.encode(), settings.bff_segredo.get_secret_value().encode()):
+        return direto
+    try:
+        return str(ipaddress.ip_address(request.headers.get("x-cliente-ip", "").strip()))
+    except ValueError:
+        return direto
+
+
+IpDoCliente = Annotated[str, Depends(ip_do_cliente)]
 
 
 def http_429(erro: limites.Excedido) -> HTTPException:

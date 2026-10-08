@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -147,3 +148,50 @@ def test_upsert_conta_certo_com_20_requisicoes_simultaneas(engine):
 
     assert total == 20
     assert resultados.count("ok") == 5 and resultados.count("429") == 15
+
+
+# ------------------------------------------------- IP real atrás do BFF (Next.js)
+
+SEGREDO_BFF = "s" * 40
+
+
+def test_sem_segredo_configurado_o_ip_do_header_e_ignorado(client, settings_teste):
+    # Mudar o X-Cliente-IP a cada tentativa NÃO escapa do limite: vale o IP da conexão.
+    settings_teste.limite_login_por_ip = 1
+    client.post("/auth/login", data={"username": "a@a.com", "password": "x" * 12},
+                headers={"X-Cliente-IP": "1.1.1.1"})
+    r = client.post("/auth/login", data={"username": "a@a.com", "password": "x" * 12},
+                    headers={"X-Cliente-IP": "2.2.2.2"})
+    assert r.status_code == 429
+
+
+def test_segredo_errado_nao_deixa_trocar_de_ip(client, settings_teste):
+    settings_teste.bff_segredo = SecretStr(SEGREDO_BFF)
+    settings_teste.limite_login_por_ip = 1
+    for ip in ("1.1.1.1", "2.2.2.2"):
+        r = client.post("/auth/login", data={"username": "a@a.com", "password": "x" * 12},
+                        headers={"X-Cliente-IP": ip, "X-BFF-Segredo": "errado" * 7})
+    assert r.status_code == 429
+
+
+def test_bff_com_segredo_separa_os_clientes_por_ip(client, settings_teste):
+    """Pelo BFF, dois usuários com IPs diferentes têm limites separados, mesmo que
+    as duas requisições cheguem do mesmo servidor do Next."""
+    settings_teste.bff_segredo = SecretStr(SEGREDO_BFF)
+    settings_teste.limite_login_por_ip = 1
+    for ip in ("1.1.1.1", "2.2.2.2"):
+        r = client.post("/auth/login", data={"username": "a@a.com", "password": "x" * 12},
+                        headers={"X-Cliente-IP": ip, "X-BFF-Segredo": SEGREDO_BFF})
+        assert r.status_code == 401  # senha errada, mas não bloqueado
+    r = client.post("/auth/login", data={"username": "a@a.com", "password": "x" * 12},
+                    headers={"X-Cliente-IP": "1.1.1.1", "X-BFF-Segredo": SEGREDO_BFF})
+    assert r.status_code == 429
+
+
+def test_ip_invalido_do_bff_cai_no_ip_da_conexao(client, settings_teste):
+    settings_teste.bff_segredo = SecretStr(SEGREDO_BFF)
+    settings_teste.limite_login_por_ip = 1
+    for lixo in ("1.1.1.1, 9.9.9.9", "'; DROP TABLE limites_taxa; --"):
+        r = client.post("/auth/login", data={"username": "a@a.com", "password": "x" * 12},
+                        headers={"X-Cliente-IP": lixo, "X-BFF-Segredo": SEGREDO_BFF})
+    assert r.status_code == 429  # as duas contaram no IP da conexão

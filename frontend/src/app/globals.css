@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/*
+ * Visual "caderno": papel quente, tinta quase preta, um acento vinho.
+ * Regras da casa (o que dá "cara de app gerado" é a estrutura, não a cor):
+ * sem sombras, sem cantos muito arredondados, sem pílulas coloridas, sem grade de
+ * cartões iguais. Seções se separam por FIOS finos, como linhas de caderno;
+ * rótulos em caixa-alta espaçada.
+ */
+:root {
+  --papel: #faf8f4;
+  --tarja: #f1ece2; /* fundo de código, linha destacada, campo */
+  --tinta: #1c1c1a;
+  --apagado: #6b675e;
+  --fio: #d8d2c6;
+  --acento: #8c2f27; /* vinho: ação principal, foco */
+  --certo: #2e6144;
+  --errado: #8c2f27;
+  --alerta: #f6e9e5;
+  color-scheme: light;
+}
+
+/* Papel noturno: escuro quente, não preto azulado. Vale quando o sistema está no
+ * escuro (e a pessoa não forçou o claro) ou quando ela escolheu o escuro. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --papel: #1d1b18;
+    --tarja: #27241f;
+    --tinta: #ece6da;
+    --apagado: #a39c8f;
+    --fio: #3a362f;
+    --acento: #e08a7c;
+    --certo: #84b897;
+    --errado: #e08a7c;
+    --alerta: #3a2522;
+    color-scheme: dark;
+  }
+}
+:root[data-tema="escuro"] {
+  --papel: #1d1b18;
+  --tarja: #27241f;
+  --tinta: #ece6da;
+  --apagado: #a39c8f;
+  --fio: #3a362f;
+  --acento: #e08a7c;
+  --certo: #84b897;
+  --errado: #e08a7c;
+  --alerta: #3a2522;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-papel: var(--papel);
+  --color-tarja: var(--tarja);
+  --color-tinta: var(--tinta);
+  --color-apagado: var(--apagado);
+  --color-fio: var(--fio);
+  --color-acento: var(--acento);
+  --color-certo: var(--certo);
+  --color-errado: var(--errado);
+  --color-alerta: var(--alerta);
+  --font-serif: var(--fonte-serifa), Georgia, serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+body {
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--font-sans);
+}
+
+/* Foco sempre visível para quem navega pelo teclado */
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+/* Campos de texto já mostram o foco no sublinhado (fica vinho): sem caixa em volta */
+input:not([type="radio"], [type="checkbox"]):focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+/* Rótulo de seção: caixa-alta pequena e espaçada */
+.rotulo {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--apagado);
+}

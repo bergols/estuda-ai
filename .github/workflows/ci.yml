@@ -1,7 +1,7 @@
 # Integração contínua: roda a cada push e pull request.
 #   backend   -> lint (ruff) + migrations + alembic check + testes contra Postgres+pgvector
+#   frontend  -> tipos gerados do OpenAPI em dia, lint, typecheck e build do Next.js
 #   segredos  -> gitleaks no histórico INTEIRO do git (não só no último commit)
-# O job do frontend (build do Next.js) entra junto com o frontend.
 name: CI
 
 on:
@@ -84,6 +84,51 @@ jobs:
 
       - name: Testes
         run: uv run --no-sync pytest
+
+      # O frontend gera os tipos a partir de frontend/openapi.json. Se uma rota ou um
+      # schema mudou e ninguém exportou de novo, o contrato commitado está velho.
+      - name: Contrato OpenAPI em dia
+        run: |
+          uv run --no-sync python -m scripts.exportar_openapi > /tmp/openapi.json
+          diff -u ../frontend/openapi.json /tmp/openapi.json
+
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci: instala exatamente o package-lock.json (falha se ele não bate)
+      - name: Dependências
+        run: npm ci
+
+      - name: Tipos da API gerados do openapi.json commitado
+        run: |
+          npm run tipos
+          git diff --exit-code src/lib/api-schema.d.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # O build não chama a API (as páginas buscam dados no navegador), mas o
+      # servidor do Next valida a configuração: BACKEND_URL só precisa existir.
+      - name: Build
+        run: npm run build
+        env:
+          BACKEND_URL: http://localhost:8000
+          NEXT_TELEMETRY_DISABLED: "1"
 
   segredos:
     runs-on: ubuntu-24.04

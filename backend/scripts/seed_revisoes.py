@@ -1,6 +1,10 @@
 """Simula semanas de estudo de um ou mais alunos, para o analytics da fase 5.
 
-    docker compose exec backend python -m scripts.seed_revisoes [--dias 42] [--alunos 1]
+    docker compose exec backend python -m scripts.seed_revisoes [--dias 42] [--alunos 1] [--senha-dev]
+
+--senha-dev dá ao estudante a senha SENHA_DEV abaixo, para entrar no frontend com
+dados de demonstração. É uma senha PÚBLICA (está no código): só para o banco local;
+nunca rode o seed com esta flag num banco de produção.
 
 Aluno 0 = estudante@estuda-ai.local (sempre com a mesma semente: os números da
 documentação vêm dele). Com --alunos N, cria também aluno-001..aluno-(N-1)
@@ -41,6 +45,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app.servicos.auth import gerar_hash
 from app.servicos.llm import custo_usd
 from app.servicos.sm2 import EstadoSM2, calcular, proxima_revisao
 from scripts.seed_experimento import url_psycopg
@@ -48,6 +53,7 @@ from scripts.seed_experimento import url_psycopg
 EMAIL = "estudante@estuda-ai.local"
 FUSO = ZoneInfo("America/Sao_Paulo")
 MODELO = "claude-haiku-4-5-20251001"
+SENHA_DEV = "estudante-local-dev"  # pública: só para o banco local (--senha-dev)
 
 DISCIPLINAS = {
     "Banco de Dados": ["Índices", "Transações", "Normalização", "SQL", "Busca vetorial"],
@@ -390,7 +396,7 @@ def gravar(cur, email: str, nome: str, sim: Simulacao) -> int:
     return usuario_id
 
 
-def main(dias: int, alunos: int) -> None:
+def main(dias: int, alunos: int, senha_dev: bool = False) -> None:
     t0 = time.perf_counter()
     totais = {"cards": 0, "revisoes": 0, "tentativas": 0, "geracoes": 0}
     with psycopg.connect(url_psycopg()) as conn:  # uma transação até o commit()
@@ -430,6 +436,9 @@ def main(dias: int, alunos: int) -> None:
                     cur.execute(f"ANALYZE {tabela}")
             if n and n % 50 == 0:
                 print(f"  {n} alunos gravados ({time.perf_counter() - t0:.0f}s)")
+        if senha_dev:
+            cur.execute("UPDATE usuarios SET senha_hash = %s WHERE id = %s",
+                        (gerar_hash(SENHA_DEV), estudante_id))
         conn.commit()  # o constraint trigger adiado confere as alternativas aqui
 
     with psycopg.connect(url_psycopg(), autocommit=True) as conn:
@@ -465,5 +474,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--dias", type=int, default=42)
     parser.add_argument("--alunos", type=int, default=1)
+    parser.add_argument("--senha-dev", action="store_true",
+                        help=f"estudante entra no frontend com a senha {SENHA_DEV!r} (só local)")
     args = parser.parse_args()
-    main(args.dias, args.alunos)
+    main(args.dias, args.alunos, args.senha_dev)

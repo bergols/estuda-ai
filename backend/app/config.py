@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     limite_login_por_ip: int = Field(default=20, ge=1)  # a cada 15 minutos
     limite_login_por_email: int = Field(default=5, ge=1)  # a cada 15 minutos
 
+    # Segredo compartilhado com o servidor do Next.js (BFF). Com o BFF no meio, toda
+    # requisição chega do IP do Next; ele repassa o IP real em X-Cliente-IP, e a API só
+    # acredita nesse header quando X-BFF-Segredo confere. Sem segredo configurado, o
+    # header é ignorado (senão qualquer um forjaria o IP e driblaria o limite de login).
+    bff_segredo: SecretStr | None = Field(default=None, min_length=32)
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,10 +1,10 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.deps import SessionDep, SettingsDep, UsuarioAtual, http_429
+from app.deps import IpDoCliente, SessionDep, SettingsDep, UsuarioAtual, http_429
 from app.schemas import TokenSaida, UsuarioLer
 from app.servicos import auth, limites
 
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenSaida)
 def login(
-    request: Request,
+    ip: IpDoCliente,
     dados: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: SessionDep,
     settings: SettingsDep,
@@ -28,7 +28,6 @@ def login(
     Contra força bruta: no máximo LIMITE_LOGIN_POR_IP tentativas por IP e
     LIMITE_LOGIN_POR_EMAIL falhas por e-mail a cada 15 minutos (429 depois disso).
     """
-    ip = request.client.host if request.client else "desconhecido"
     chave_email = f"login:email:{dados.username.strip().lower()}"
     try:
         # Por IP: conta toda tentativa. Por e-mail: só confere aqui e conta as FALHAS

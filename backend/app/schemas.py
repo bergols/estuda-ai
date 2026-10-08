@@ -70,8 +70,10 @@ class MaterialLer(BaseModel):
     id: int
     disciplina_id: int
     titulo: str
-    tipo: str
-    status: str
+    # Literal = o mesmo conjunto do CHECK no banco; o OpenAPI vira um enum e o
+    # frontend recebe um tipo com os 4 estados, não uma string qualquer.
+    tipo: Literal["pdf", "anotacao", "texto"]
+    status: Literal["pendente", "processando", "concluido", "erro"]
     nome_arquivo: str | None
     tamanho_bytes: int
     num_paginas: int | None

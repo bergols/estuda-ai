@@ -1,0 +1,4118 @@
+{
+  "components": {
+    "schemas": {
+      "AcertoSemanal": {
+        "properties": {
+          "acertos": {
+            "title": "Acertos",
+            "type": "integer"
+          },
+          "disciplina_id": {
+            "title": "Disciplina Id",
+            "type": "integer"
+          },
+          "fonte": {
+            "enum": [
+              "revisao",
+              "questao",
+              "total"
+            ],
+            "title": "Fonte",
+            "type": "string"
+          },
+          "grupo": {
+            "title": "Grupo",
+            "type": "string"
+          },
+          "respostas": {
+            "title": "Respostas",
+            "type": "integer"
+          },
+          "semana": {
+            "format": "date",
+            "title": "Semana",
+            "type": "string"
+          },
+          "taxa": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxa"
+          }
+        },
+        "required": [
+          "semana",
+          "disciplina_id",
+          "grupo",
+          "fonte",
+          "respostas",
+          "acertos",
+          "taxa"
+        ],
+        "title": "AcertoSemanal",
+        "type": "object"
+      },
+      "AlternativaLer": {
+        "description": "Sem o campo correta: listar questões não pode entregar o gabarito.",
+        "properties": {
+          "letra": {
+            "title": "Letra",
+            "type": "string"
+          },
+          "texto": {
+            "title": "Texto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "letra",
+          "texto"
+        ],
+        "title": "AlternativaLer",
+        "type": "object"
+      },
+      "AtualizacaoMVSaida": {
+        "properties": {
+          "atualizado_em": {
+            "format": "date-time",
+            "title": "Atualizado Em",
+            "type": "string"
+          },
+          "duracao_ms": {
+            "title": "Duracao Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "atualizado_em",
+          "duracao_ms"
+        ],
+        "title": "AtualizacaoMVSaida",
+        "type": "object"
+      },
+      "Body_enviar_material_disciplinas__disciplina_id__materiais_post": {
+        "properties": {
+          "arquivo": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Arquivo",
+            "type": "string"
+          },
+          "titulo": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo"
+          }
+        },
+        "required": [
+          "arquivo"
+        ],
+        "title": "Body_enviar_material_disciplinas__disciplina_id__materiais_post",
+        "type": "object"
+      },
+      "Body_login_auth_login_post": {
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          },
+          "grant_type": {
+            "anyOf": [
+              {
+                "pattern": "^password$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "password": {
+            "format": "password",
+            "title": "Password",
+            "type": "string"
+          },
+          "scope": {
+            "default": "",
+            "title": "Scope",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_login_auth_login_post",
+        "type": "object"
+      },
+      "CardDaFila": {
+        "properties": {
+          "atraso_dias": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Atraso Dias",
+            "type": "string"
+          },
+          "disciplina_id": {
+            "title": "Disciplina Id",
+            "type": "integer"
+          },
+          "disciplina_nome": {
+            "title": "Disciplina Nome",
+            "type": "string"
+          },
+          "facilidade": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Facilidade",
+            "type": "string"
+          },
+          "flashcard_id": {
+            "title": "Flashcard Id",
+            "type": "integer"
+          },
+          "frente": {
+            "title": "Frente",
+            "type": "string"
+          },
+          "intervalo_dias": {
+            "title": "Intervalo Dias",
+            "type": "integer"
+          },
+          "proxima_revisao": {
+            "format": "date-time",
+            "title": "Proxima Revisao",
+            "type": "string"
+          },
+          "repeticoes": {
+            "title": "Repeticoes",
+            "type": "integer"
+          },
+          "topico": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topico"
+          },
+          "versao": {
+            "title": "Versao",
+            "type": "integer"
+          },
+          "verso": {
+            "title": "Verso",
+            "type": "string"
+          }
+        },
+        "required": [
+          "flashcard_id",
+          "frente",
+          "verso",
+          "topico",
+          "disciplina_id",
+          "disciplina_nome",
+          "proxima_revisao",
+          "atraso_dias",
+          "repeticoes",
+          "intervalo_dias",
+          "facilidade",
+          "versao"
+        ],
+        "title": "CardDaFila",
+        "type": "object"
+      },
+      "CardDificil": {
+        "properties": {
+          "disciplina": {
+            "title": "Disciplina",
+            "type": "string"
+          },
+          "disciplina_id": {
+            "title": "Disciplina Id",
+            "type": "integer"
+          },
+          "erros": {
+            "title": "Erros",
+            "type": "integer"
+          },
+          "facilidade": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Facilidade",
+            "type": "string"
+          },
+          "flashcard_id": {
+            "title": "Flashcard Id",
+            "type": "integer"
+          },
+          "frente": {
+            "title": "Frente",
+            "type": "string"
+          },
+          "posicao": {
+            "title": "Posicao",
+            "type": "integer"
+          },
+          "posicao_rank": {
+            "title": "Posicao Rank",
+            "type": "integer"
+          },
+          "revisoes": {
+            "title": "Revisoes",
+            "type": "integer"
+          },
+          "taxa_erro": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Taxa Erro",
+            "type": "string"
+          },
+          "topico": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topico"
+          }
+        },
+        "required": [
+          "disciplina_id",
+          "disciplina",
+          "posicao",
+          "posicao_rank",
+          "flashcard_id",
+          "frente",
+          "topico",
+          "revisoes",
+          "erros",
+          "taxa_erro",
+          "facilidade"
+        ],
+        "title": "CardDificil",
+        "type": "object"
+      },
+      "Citacao": {
+        "properties": {
+          "material_id": {
+            "title": "Material Id",
+            "type": "integer"
+          },
+          "material_titulo": {
+            "title": "Material Titulo",
+            "type": "string"
+          },
+          "pagina": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pagina"
+          },
+          "pagina_fim": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pagina Fim"
+          },
+          "trecho": {
+            "title": "Trecho",
+            "type": "string"
+          },
+          "trecho_id": {
+            "title": "Trecho Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "trecho_id",
+          "material_id",
+          "material_titulo",
+          "pagina",
+          "pagina_fim",
+          "trecho"
+        ],
+        "title": "Citacao",
+        "type": "object"
+      },
+      "CustoMensal": {
+        "properties": {
+          "acumulado_tipo": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Acumulado Tipo",
+            "type": "string"
+          },
+          "acumulado_total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Acumulado Total",
+            "type": "string"
+          },
+          "custo_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Custo Usd",
+            "type": "string"
+          },
+          "falhas": {
+            "title": "Falhas",
+            "type": "integer"
+          },
+          "geracoes": {
+            "title": "Geracoes",
+            "type": "integer"
+          },
+          "mes": {
+            "format": "date",
+            "title": "Mes",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "tokens_entrada": {
+            "title": "Tokens Entrada",
+            "type": "integer"
+          },
+          "tokens_saida": {
+            "title": "Tokens Saida",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mes",
+          "tipo",
+          "geracoes",
+          "falhas",
+          "tokens_entrada",
+          "tokens_saida",
+          "custo_usd",
+          "acumulado_tipo",
+          "acumulado_total"
+        ],
+        "title": "CustoMensal",
+        "type": "object"
+      },
+      "DiaCalendario": {
+        "properties": {
+          "dia": {
+            "format": "date",
+            "title": "Dia",
+            "type": "string"
+          },
+          "dia_semana": {
+            "title": "Dia Semana",
+            "type": "integer"
+          },
+          "nivel": {
+            "title": "Nivel",
+            "type": "integer"
+          },
+          "revisoes": {
+            "title": "Revisoes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dia",
+          "dia_semana",
+          "revisoes",
+          "nivel"
+        ],
+        "title": "DiaCalendario",
+        "type": "object"
+      },
+      "DisciplinaAtualizar": {
+        "description": "PATCH: só os campos enviados são alterados.",
+        "properties": {
+          "descricao": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descricao"
+          },
+          "nome": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome"
+          }
+        },
+        "title": "DisciplinaAtualizar",
+        "type": "object"
+      },
+      "DisciplinaCriar": {
+        "properties": {
+          "descricao": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descricao"
+          },
+          "nome": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Nome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nome"
+        ],
+        "title": "DisciplinaCriar",
+        "type": "object"
+      },
+      "DisciplinaLer": {
+        "properties": {
+          "atualizado_em": {
+            "format": "date-time",
+            "title": "Atualizado Em",
+            "type": "string"
+          },
+          "criado_em": {
+            "format": "date-time",
+            "title": "Criado Em",
+            "type": "string"
+          },
+          "descricao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descricao"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nome",
+          "descricao",
+          "criado_em",
+          "atualizado_em"
+        ],
+        "title": "DisciplinaLer",
+        "type": "object"
+      },
+      "EstadoSM2Saida": {
+        "properties": {
+          "facilidade": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Facilidade",
+            "type": "string"
+          },
+          "intervalo_dias": {
+            "title": "Intervalo Dias",
+            "type": "integer"
+          },
+          "repeticoes": {
+            "title": "Repeticoes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "facilidade",
+          "intervalo_dias",
+          "repeticoes"
+        ],
+        "title": "EstadoSM2Saida",
+        "type": "object"
+      },
+      "EvolucaoDia": {
+        "properties": {
+          "acertos": {
+            "title": "Acertos",
+            "type": "integer"
+          },
+          "dia": {
+            "format": "date",
+            "title": "Dia",
+            "type": "string"
+          },
+          "respostas": {
+            "title": "Respostas",
+            "type": "integer"
+          },
+          "respostas_7d": {
+            "title": "Respostas 7D",
+            "type": "integer"
+          },
+          "taxa": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxa"
+          },
+          "taxa_media_7d": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxa Media 7D"
+          }
+        },
+        "required": [
+          "dia",
+          "respostas",
+          "acertos",
+          "taxa",
+          "respostas_7d",
+          "taxa_media_7d"
+        ],
+        "title": "EvolucaoDia",
+        "type": "object"
+      },
+      "EvolucaoSemana": {
+        "properties": {
+          "acertos": {
+            "title": "Acertos",
+            "type": "integer"
+          },
+          "respostas": {
+            "title": "Respostas",
+            "type": "integer"
+          },
+          "semana": {
+            "format": "date",
+            "title": "Semana",
+            "type": "string"
+          },
+          "taxa": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxa"
+          },
+          "taxa_semana_anterior": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxa Semana Anterior"
+          },
+          "variacao_pp": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variacao Pp"
+          },
+          "variacao_respostas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variacao Respostas"
+          }
+        },
+        "required": [
+          "semana",
+          "respostas",
+          "acertos",
+          "taxa",
+          "taxa_semana_anterior",
+          "variacao_pp",
+          "variacao_respostas"
+        ],
+        "title": "EvolucaoSemana",
+        "type": "object"
+      },
+      "FilaDoDia": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CardDaFila"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "fim_de_hoje": {
+            "format": "date-time",
+            "title": "Fim De Hoje",
+            "type": "string"
+          },
+          "fuso_horario": {
+            "title": "Fuso Horario",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fuso_horario",
+          "fim_de_hoje",
+          "cards"
+        ],
+        "title": "FilaDoDia",
+        "type": "object"
+      },
+      "FlashcardDescartado": {
+        "properties": {
+          "frente": {
+            "title": "Frente",
+            "type": "string"
+          },
+          "parecido_com_frente": {
+            "title": "Parecido Com Frente",
+            "type": "string"
+          },
+          "parecido_com_id": {
+            "title": "Parecido Com Id",
+            "type": "integer"
+          },
+          "similaridade": {
+            "title": "Similaridade",
+            "type": "number"
+          },
+          "verso": {
+            "title": "Verso",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frente",
+          "verso",
+          "parecido_com_id",
+          "parecido_com_frente",
+          "similaridade"
+        ],
+        "title": "FlashcardDescartado",
+        "type": "object"
+      },
+      "FlashcardLer": {
+        "properties": {
+          "criado_em": {
+            "format": "date-time",
+            "title": "Criado Em",
+            "type": "string"
+          },
+          "frente": {
+            "title": "Frente",
+            "type": "string"
+          },
+          "geracao_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geracao Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "origem": {
+            "title": "Origem",
+            "type": "string"
+          },
+          "topico": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topico"
+          },
+          "trechos": {
+            "items": {
+              "$ref": "#/components/schemas/TrechoOrigem"
+            },
+            "title": "Trechos",
+            "type": "array"
+          },
+          "verso": {
+            "title": "Verso",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "frente",
+          "verso",
+          "topico",
+          "origem",
+          "geracao_id",
+          "trechos",
+          "criado_em"
+        ],
+        "title": "FlashcardLer",
+        "type": "object"
+      },
+      "FlashcardsGeradosSaida": {
+        "properties": {
+          "criados": {
+            "items": {
+              "$ref": "#/components/schemas/FlashcardLer"
+            },
+            "title": "Criados",
+            "type": "array"
+          },
+          "descartados": {
+            "items": {
+              "$ref": "#/components/schemas/FlashcardDescartado"
+            },
+            "title": "Descartados",
+            "type": "array"
+          },
+          "geracao": {
+            "$ref": "#/components/schemas/GeracaoResumo"
+          },
+          "limiar_duplicata": {
+            "title": "Limiar Duplicata",
+            "type": "number"
+          }
+        },
+        "required": [
+          "criados",
+          "descartados",
+          "limiar_duplicata",
+          "geracao"
+        ],
+        "title": "FlashcardsGeradosSaida",
+        "type": "object"
+      },
+      "GastoMensal": {
+        "properties": {
+          "custo_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Custo Usd",
+            "type": "string"
+          },
+          "disciplina_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disciplina Id"
+          },
+          "disciplina_nome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disciplina Nome"
+          },
+          "geracoes": {
+            "title": "Geracoes",
+            "type": "integer"
+          },
+          "mes": {
+            "format": "date",
+            "title": "Mes",
+            "type": "string"
+          },
+          "tokens_entrada": {
+            "title": "Tokens Entrada",
+            "type": "integer"
+          },
+          "tokens_saida": {
+            "title": "Tokens Saida",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "disciplina_id",
+          "disciplina_nome",
+          "mes",
+          "geracoes",
+          "tokens_entrada",
+          "tokens_saida",
+          "custo_usd"
+        ],
+        "title": "GastoMensal",
+        "type": "object"
+      },
+      "GeracaoResumo": {
+        "description": "O que a chamada ao LLM custou (linha da tabela geracoes).",
+        "properties": {
+          "chamadas": {
+            "title": "Chamadas",
+            "type": "integer"
+          },
+          "custo_usd": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custo Usd"
+          },
+          "duracao_ms": {
+            "title": "Duracao Ms",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "modelo": {
+            "title": "Modelo",
+            "type": "string"
+          },
+          "tokens_entrada": {
+            "title": "Tokens Entrada",
+            "type": "integer"
+          },
+          "tokens_saida": {
+            "title": "Tokens Saida",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "modelo",
+          "tokens_entrada",
+          "tokens_saida",
+          "custo_usd",
+          "duracao_ms",
+          "chamadas"
+        ],
+        "title": "GeracaoResumo",
+        "type": "object"
+      },
+      "GerarEntrada": {
+        "description": "Gerar a partir de UM material inteiro OU de um tema (busca híbrida).",
+        "properties": {
+          "material_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Material Id"
+          },
+          "quantidade": {
+            "default": 8,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Quantidade",
+            "type": "integer"
+          },
+          "tema": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tema"
+          }
+        },
+        "title": "GerarEntrada",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MaterialLer": {
+        "properties": {
+          "criado_em": {
+            "format": "date-time",
+            "title": "Criado Em",
+            "type": "string"
+          },
+          "disciplina_id": {
+            "title": "Disciplina Id",
+            "type": "integer"
+          },
+          "erro_mensagem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Erro Mensagem"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "nome_arquivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome Arquivo"
+          },
+          "num_paginas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Paginas"
+          },
+          "processado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processado Em"
+          },
+          "status": {
+            "enum": [
+              "pendente",
+              "processando",
+              "concluido",
+              "erro"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tamanho_bytes": {
+            "title": "Tamanho Bytes",
+            "type": "integer"
+          },
+          "tipo": {
+            "enum": [
+              "pdf",
+              "anotacao",
+              "texto"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "disciplina_id",
+          "titulo",
+          "tipo",
+          "status",
+          "nome_arquivo",
+          "tamanho_bytes",
+          "num_paginas",
+          "erro_mensagem",
+          "criado_em",
+          "processado_em"
+        ],
+        "title": "MaterialLer",
+        "type": "object"
+      },
+      "PerguntaEntrada": {
+        "properties": {
+          "k": {
+            "default": 6,
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "K",
+            "type": "integer"
+          },
+          "pergunta": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Pergunta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pergunta"
+        ],
+        "title": "PerguntaEntrada",
+        "type": "object"
+      },
+      "PrevisaoDia": {
+        "properties": {
+          "atrasados": {
+            "title": "Atrasados",
+            "type": "integer"
+          },
+          "cards": {
+            "title": "Cards",
+            "type": "integer"
+          },
+          "dia": {
+            "format": "date",
+            "title": "Dia",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dia",
+          "cards",
+          "atrasados"
+        ],
+        "title": "PrevisaoDia",
+        "type": "object"
+      },
+      "QuestaoLer": {
+        "properties": {
+          "alternativas": {
+            "items": {
+              "$ref": "#/components/schemas/AlternativaLer"
+            },
+            "title": "Alternativas",
+            "type": "array"
+          },
+          "criado_em": {
+            "format": "date-time",
+            "title": "Criado Em",
+            "type": "string"
+          },
+          "dificuldade": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dificuldade"
+          },
+          "enunciado": {
+            "title": "Enunciado",
+            "type": "string"
+          },
+          "geracao_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geracao Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "topico": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topico"
+          },
+          "trechos": {
+            "items": {
+              "$ref": "#/components/schemas/TrechoOrigem"
+            },
+            "title": "Trechos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "enunciado",
+          "dificuldade",
+          "topico",
+          "alternativas",
+          "trechos",
+          "geracao_id",
+          "criado_em"
+        ],
+        "title": "QuestaoLer",
+        "type": "object"
+      },
+      "QuestoesGeradasSaida": {
+        "properties": {
+          "geracao": {
+            "$ref": "#/components/schemas/GeracaoResumo"
+          },
+          "questoes": {
+            "items": {
+              "$ref": "#/components/schemas/QuestaoLer"
+            },
+            "title": "Questoes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "questoes",
+          "geracao"
+        ],
+        "title": "QuestoesGeradasSaida",
+        "type": "object"
+      },
+      "RespostaPergunta": {
+        "properties": {
+          "citacoes": {
+            "items": {
+              "$ref": "#/components/schemas/Citacao"
+            },
+            "title": "Citacoes",
+            "type": "array"
+          },
+          "encontrado": {
+            "title": "Encontrado",
+            "type": "boolean"
+          },
+          "geracao": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeracaoResumo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resposta": {
+            "title": "Resposta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resposta",
+          "encontrado",
+          "citacoes",
+          "geracao"
+        ],
+        "title": "RespostaPergunta",
+        "type": "object"
+      },
+      "ResultadoBusca": {
+        "properties": {
+          "conteudo": {
+            "title": "Conteudo",
+            "type": "string"
+          },
+          "material_id": {
+            "title": "Material Id",
+            "type": "integer"
+          },
+          "material_titulo": {
+            "title": "Material Titulo",
+            "type": "string"
+          },
+          "pagina": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pagina"
+          },
+          "pagina_fim": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pagina Fim"
+          },
+          "posicao_semantica": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posicao Semantica"
+          },
+          "posicao_textual": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posicao Textual"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "trecho_id": {
+            "title": "Trecho Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "trecho_id",
+          "material_id",
+          "material_titulo",
+          "conteudo",
+          "pagina",
+          "pagina_fim",
+          "score"
+        ],
+        "title": "ResultadoBusca",
+        "type": "object"
+      },
+      "ResultadoRevisaoSaida": {
+        "properties": {
+          "anterior": {
+            "$ref": "#/components/schemas/EstadoSM2Saida"
+          },
+          "flashcard_id": {
+            "title": "Flashcard Id",
+            "type": "integer"
+          },
+          "historico_id": {
+            "title": "Historico Id",
+            "type": "integer"
+          },
+          "nota": {
+            "title": "Nota",
+            "type": "integer"
+          },
+          "novo": {
+            "$ref": "#/components/schemas/EstadoSM2Saida"
+          },
+          "proxima_revisao": {
+            "format": "date-time",
+            "title": "Proxima Revisao",
+            "type": "string"
+          },
+          "versao": {
+            "title": "Versao",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "flashcard_id",
+          "nota",
+          "anterior",
+          "novo",
+          "proxima_revisao",
+          "versao",
+          "historico_id"
+        ],
+        "title": "ResultadoRevisaoSaida",
+        "type": "object"
+      },
+      "RevisaoEntrada": {
+        "properties": {
+          "nota": {
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Nota",
+            "type": "integer"
+          },
+          "versao": {
+            "description": "a versao do card que você recebeu na fila",
+            "minimum": 0.0,
+            "title": "Versao",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nota",
+          "versao"
+        ],
+        "title": "RevisaoEntrada",
+        "type": "object"
+      },
+      "Sequencia": {
+        "properties": {
+          "atual_dias": {
+            "title": "Atual Dias",
+            "type": "integer"
+          },
+          "atual_fim": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atual Fim"
+          },
+          "atual_inicio": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atual Inicio"
+          },
+          "dias_estudados": {
+            "title": "Dias Estudados",
+            "type": "integer"
+          },
+          "estudou_hoje": {
+            "title": "Estudou Hoje",
+            "type": "boolean"
+          },
+          "hoje": {
+            "format": "date",
+            "title": "Hoje",
+            "type": "string"
+          },
+          "maior_dias": {
+            "title": "Maior Dias",
+            "type": "integer"
+          },
+          "maior_fim": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maior Fim"
+          },
+          "maior_inicio": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maior Inicio"
+          }
+        },
+        "required": [
+          "hoje",
+          "atual_dias",
+          "atual_inicio",
+          "atual_fim",
+          "estudou_hoje",
+          "maior_dias",
+          "maior_inicio",
+          "maior_fim",
+          "dias_estudados"
+        ],
+        "title": "Sequencia",
+        "type": "object"
+      },
+      "Serie_AcertoSemanal_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/AcertoSemanal"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[AcertoSemanal]",
+        "type": "object"
+      },
+      "Serie_CardDificil_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/CardDificil"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[CardDificil]",
+        "type": "object"
+      },
+      "Serie_CustoMensal_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/CustoMensal"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[CustoMensal]",
+        "type": "object"
+      },
+      "Serie_DiaCalendario_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/DiaCalendario"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[DiaCalendario]",
+        "type": "object"
+      },
+      "Serie_EvolucaoDia_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/EvolucaoDia"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[EvolucaoDia]",
+        "type": "object"
+      },
+      "Serie_EvolucaoSemana_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/EvolucaoSemana"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[EvolucaoSemana]",
+        "type": "object"
+      },
+      "Serie_PrevisaoDia_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/PrevisaoDia"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[PrevisaoDia]",
+        "type": "object"
+      },
+      "TentativaEntrada": {
+        "properties": {
+          "alternativa": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E"
+            ],
+            "title": "Alternativa",
+            "type": "string"
+          },
+          "tempo_ms": {
+            "anyOf": [
+              {
+                "maximum": 3600000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tempo Ms"
+          }
+        },
+        "required": [
+          "alternativa"
+        ],
+        "title": "TentativaEntrada",
+        "type": "object"
+      },
+      "TentativaResultado": {
+        "properties": {
+          "alternativa_correta": {
+            "title": "Alternativa Correta",
+            "type": "string"
+          },
+          "alternativa_escolhida": {
+            "title": "Alternativa Escolhida",
+            "type": "string"
+          },
+          "correta": {
+            "title": "Correta",
+            "type": "boolean"
+          },
+          "explicacao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explicacao"
+          },
+          "tempo_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tempo Ms"
+          },
+          "tentativa_id": {
+            "title": "Tentativa Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tentativa_id",
+          "correta",
+          "alternativa_escolhida",
+          "alternativa_correta",
+          "explicacao",
+          "tempo_ms"
+        ],
+        "title": "TentativaResultado",
+        "type": "object"
+      },
+      "TokenSaida": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expira_em": {
+            "format": "date-time",
+            "title": "Expira Em",
+            "type": "string"
+          },
+          "token_type": {
+            "const": "bearer",
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expira_em"
+        ],
+        "title": "TokenSaida",
+        "type": "object"
+      },
+      "TrechoOrigem": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "material_id": {
+            "title": "Material Id",
+            "type": "integer"
+          },
+          "pagina": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pagina"
+          }
+        },
+        "required": [
+          "id",
+          "material_id",
+          "pagina"
+        ],
+        "title": "TrechoOrigem",
+        "type": "object"
+      },
+      "UsuarioLer": {
+        "properties": {
+          "criado_em": {
+            "format": "date-time",
+            "title": "Criado Em",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "fuso_horario": {
+            "title": "Fuso Horario",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "nome",
+          "email",
+          "fuso_horario",
+          "criado_em"
+        ],
+        "title": "UsuarioLer",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/auth/login"
+          }
+        },
+        "type": "oauth2"
+      }
+    }
+  },
+  "info": {
+    "title": "estuda-ai",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/analytics/acerto-semanal": {
+      "get": {
+        "description": "Taxa de acerto (revisões com nota >= 3 + questões) por semana e disciplina ou material.\n\nPadrão: últimas 12 semanas. Por disciplina vem da materialized view (veja atualizado_em).",
+        "operationId": "acerto_semanal_analytics_acerto_semanal_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "por",
+            "required": false,
+            "schema": {
+              "default": "disciplina",
+              "enum": [
+                "disciplina",
+                "material"
+              ],
+              "title": "Por",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_AcertoSemanal_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Acerto Semanal",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/atualizar": {
+      "post": {
+        "description": "REFRESH MATERIALIZED VIEW CONCURRENTLY: traz para o analytics as respostas\nregistradas depois do último refresh, sem bloquear quem está lendo.",
+        "operationId": "atualizar_analytics_atualizar_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AtualizacaoMVSaida"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Atualizar",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/calendario": {
+      "get": {
+        "description": "Revisões por dia (calendário estilo GitHub), com nível de 0 a 4. Padrão: 1 ano.",
+        "operationId": "calendario_analytics_calendario_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_DiaCalendario_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Calendario",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/cards-dificeis": {
+      "get": {
+        "description": "Os cards com mais erros (e menor facilidade) de cada disciplina, com empates\n(DENSE_RANK). Sem período: todo o histórico. Ao vivo.",
+        "operationId": "cards_dificeis_analytics_cards_dificeis_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_CardDificil_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Cards Dificeis",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/custos": {
+      "get": {
+        "description": "Gasto com IA por mês e tipo de geração, com acumulados. Sem período: tudo. Ao vivo.",
+        "operationId": "custos_analytics_custos_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_CustoMensal_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Custos",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/evolucao/diaria": {
+      "get": {
+        "description": "Taxa de acerto por dia e média móvel de 7 dias. Padrão: últimos 30 dias.",
+        "operationId": "evolucao_diaria_analytics_evolucao_diaria_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_EvolucaoDia_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Evolucao Diaria",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/evolucao/semanal": {
+      "get": {
+        "description": "Taxa de acerto por semana comparada à semana anterior (LAG). Padrão: 12 semanas.",
+        "operationId": "evolucao_semanal_analytics_evolucao_semanal_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_EvolucaoSemana_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Evolucao Semanal",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/previsao": {
+      "get": {
+        "description": "Quantos cards vencem em cada um dos próximos dias (atrasados entram em hoje). Ao vivo.",
+        "operationId": "previsao_analytics_previsao_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dias",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Dias",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_PrevisaoDia_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Previsao",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/sequencia": {
+      "get": {
+        "description": "Dias seguidos com pelo menos uma revisão (no fuso do usuário): a sequência atual\ne a maior de todas. Ao vivo.",
+        "operationId": "sequencia_analytics_sequencia_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sequencia"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Sequencia",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/auth/eu": {
+      "get": {
+        "operationId": "eu_auth_eu_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioLer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Eu",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "Troca e-mail (no campo `username`) e senha por um JWT válido por 30 dias.\n\nFormulário (application/x-www-form-urlencoded), o formato do fluxo \"password\" do\nOAuth2, para o botão Authorize do /docs funcionar.\n\nContra força bruta: no máximo LIMITE_LOGIN_POR_IP tentativas por IP e\nLIMITE_LOGIN_POR_EMAIL falhas por e-mail a cada 15 minutos (429 depois disso).",
+        "operationId": "login_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_login_auth_login_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenSaida"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/sair-de-todos": {
+      "post": {
+        "description": "Invalida todos os tokens deste usuário, em todos os dispositivos (inclusive este).",
+        "operationId": "sair_de_todos_auth_sair_de_todos_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Sair De Todos",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/disciplinas": {
+      "get": {
+        "operationId": "listar_disciplinas_disciplinas_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DisciplinaLer"
+                  },
+                  "title": "Response Listar Disciplinas Disciplinas Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Listar Disciplinas",
+        "tags": [
+          "disciplinas"
+        ]
+      },
+      "post": {
+        "operationId": "criar_disciplina_disciplinas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisciplinaCriar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisciplinaLer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Criar Disciplina",
+        "tags": [
+          "disciplinas"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}": {
+      "delete": {
+        "operationId": "apagar_disciplina_disciplinas__disciplina_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Apagar Disciplina",
+        "tags": [
+          "disciplinas"
+        ]
+      },
+      "get": {
+        "operationId": "obter_disciplina_disciplinas__disciplina_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisciplinaLer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Obter Disciplina",
+        "tags": [
+          "disciplinas"
+        ]
+      },
+      "patch": {
+        "operationId": "atualizar_disciplina_disciplinas__disciplina_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisciplinaAtualizar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisciplinaLer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Atualizar Disciplina",
+        "tags": [
+          "disciplinas"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/busca": {
+      "get": {
+        "description": "Busca nos trechos dos materiais da disciplina.\n\n- semantica: por significado (embeddings + distância de cosseno).\n- textual: por palavras (full-text do Postgres, sem acento, com radicais).\n- hibrida: as duas combinadas por Reciprocal Rank Fusion.",
+        "operationId": "buscar_disciplinas__disciplina_id__busca_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "K",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "modo",
+            "required": false,
+            "schema": {
+              "default": "semantica",
+              "enum": [
+                "semantica",
+                "textual",
+                "hibrida"
+              ],
+              "title": "Modo",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResultadoBusca"
+                  },
+                  "title": "Response Buscar Disciplinas  Disciplina Id  Busca Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Buscar",
+        "tags": [
+          "busca"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/flashcards": {
+      "get": {
+        "operationId": "listar_flashcards_disciplinas__disciplina_id__flashcards_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FlashcardLer"
+                  },
+                  "title": "Response Listar Flashcards Disciplinas  Disciplina Id  Flashcards Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Listar Flashcards",
+        "tags": [
+          "flashcards"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/flashcards/gerar": {
+      "post": {
+        "description": "Gera flashcards de um material (até 30 trechos distribuídos) ou de um tema.\n\nCards muito parecidos com os já existentes na disciplina são descartados\n(similaridade de cosseno >= limiar) e listados em `descartados`.",
+        "operationId": "gerar_flashcards_disciplinas__disciplina_id__flashcards_gerar_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GerarEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlashcardsGeradosSaida"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Gerar Flashcards",
+        "tags": [
+          "flashcards"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/materiais": {
+      "get": {
+        "operationId": "listar_materiais_disciplinas__disciplina_id__materiais_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MaterialLer"
+                  },
+                  "title": "Response Listar Materiais Disciplinas  Disciplina Id  Materiais Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Listar Materiais",
+        "tags": [
+          "materiais"
+        ]
+      },
+      "post": {
+        "description": "Recebe um PDF e agenda o processamento. Responde 202 (aceito, ainda não\nprocessado): acompanhe o campo status em GET .../materiais/{id}.",
+        "operationId": "enviar_material_disciplinas__disciplina_id__materiais_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_enviar_material_disciplinas__disciplina_id__materiais_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialLer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Enviar Material",
+        "tags": [
+          "materiais"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/materiais/{material_id}": {
+      "delete": {
+        "operationId": "apagar_material_disciplinas__disciplina_id__materiais__material_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "material_id",
+            "required": true,
+            "schema": {
+              "title": "Material Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Apagar Material",
+        "tags": [
+          "materiais"
+        ]
+      },
+      "get": {
+        "operationId": "obter_material_disciplinas__disciplina_id__materiais__material_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "material_id",
+            "required": true,
+            "schema": {
+              "title": "Material Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialLer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Obter Material",
+        "tags": [
+          "materiais"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/materiais/{material_id}/reprocessar": {
+      "post": {
+        "description": "Devolve um material com erro para a fila (erro -> pendente).",
+        "operationId": "reprocessar_material_disciplinas__disciplina_id__materiais__material_id__reprocessar_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "material_id",
+            "required": true,
+            "schema": {
+              "title": "Material Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialLer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Reprocessar Material",
+        "tags": [
+          "materiais"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/perguntar": {
+      "post": {
+        "description": "Pergunta ao material da disciplina (RAG): resposta + citações (trecho, material, página).\n\nSe os trechos recuperados não cobrem a pergunta, encontrado = false.",
+        "operationId": "perguntar_disciplinas__disciplina_id__perguntar_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PerguntaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaPergunta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Perguntar",
+        "tags": [
+          "geracao"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/questoes": {
+      "get": {
+        "operationId": "listar_questoes_disciplinas__disciplina_id__questoes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QuestaoLer"
+                  },
+                  "title": "Response Listar Questoes Disciplinas  Disciplina Id  Questoes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Listar Questoes",
+        "tags": [
+          "questoes"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/questoes/gerar": {
+      "post": {
+        "description": "Gera questões de múltipla escolha (4 alternativas, 1 correta, explicação).\n\nA resposta não traz o gabarito: ele aparece ao registrar uma tentativa.",
+        "operationId": "gerar_questoes_disciplinas__disciplina_id__questoes_gerar_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GerarEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestoesGeradasSaida"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Gerar Questoes",
+        "tags": [
+          "questoes"
+        ]
+      }
+    },
+    "/disciplinas/{disciplina_id}/questoes/{questao_id}/tentativas": {
+      "post": {
+        "description": "Registra a resposta (alternativa escolhida, acerto, tempo) e devolve o gabarito.",
+        "operationId": "responder_questao_disciplinas__disciplina_id__questoes__questao_id__tentativas_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "questao_id",
+            "required": true,
+            "schema": {
+              "title": "Questao Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "disciplina_id",
+            "required": true,
+            "schema": {
+              "title": "Disciplina Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TentativaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TentativaResultado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Responder Questao",
+        "tags": [
+          "questoes"
+        ]
+      }
+    },
+    "/gastos": {
+      "get": {
+        "description": "Gasto com o LLM do usuário atual, por disciplina e por mês (todas as\ngerações, inclusive as que falharam: a chamada foi cobrada).",
+        "operationId": "gastos_gastos_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GastoMensal"
+                  },
+                  "title": "Response Gastos Gastos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Gastos",
+        "tags": [
+          "gastos"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Verifica se a API alcança o banco e se a extensão pgvector está ativa.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/revisoes/hoje": {
+      "get": {
+        "description": "Cards que vencem até o fim de hoje (no fuso do usuário), do mais atrasado\npara o menos atrasado.",
+        "operationId": "fila_de_hoje_revisoes_hoje_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilaDoDia"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Fila De Hoje",
+        "tags": [
+          "revisoes"
+        ]
+      }
+    },
+    "/revisoes/{flashcard_id}": {
+      "post": {
+        "description": "Registra a nota (0 a 5): atualiza o estado do SM-2 e grava o histórico.\n\n`versao` é a que veio na fila. Se o card já foi revisado por outra requisição\n(duplo clique, outra aba), responde 409 com a versão atual e nada é gravado.",
+        "operationId": "revisar_revisoes__flashcard_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "flashcard_id",
+            "required": true,
+            "schema": {
+              "title": "Flashcard Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisaoEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoRevisaoSaida"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revisar",
+        "tags": [
+          "revisoes"
+        ]
+      }
+    }
+  }
+}
