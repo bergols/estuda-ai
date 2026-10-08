@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db import get_session
 from app.routers import (
     analytics,
+    auth,
     busca,
     disciplinas,
     flashcards,
@@ -17,11 +18,10 @@ from app.routers import (
     perguntar,
     questoes,
     revisoes,
-    usuarios,
 )
 
 app = FastAPI(title="estuda-ai", version="0.1.0")
-app.include_router(usuarios.router)
+app.include_router(auth.router)
 app.include_router(disciplinas.router)
 app.include_router(materiais.router)
 app.include_router(busca.router)

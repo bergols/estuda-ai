@@ -1,3 +1,6 @@
+from tests.conftest import cabecalho
+
+
 def criar(client, headers, nome, descricao=None):
     return client.post("/disciplinas", json={"nome": nome, "descricao": descricao}, headers=headers)
 
@@ -29,7 +32,7 @@ def test_nome_duplicado_ignorando_maiusculas_retorna_409(client, headers):
 def test_mesmo_nome_em_usuarios_diferentes_e_permitido(client, headers, outro_usuario):
     criar(client, headers, "Física")
 
-    resposta = criar(client, {"X-Usuario-Id": str(outro_usuario.id)}, "Física")
+    resposta = criar(client, cabecalho(outro_usuario), "Física")
 
     assert resposta.status_code == 201
 
@@ -44,7 +47,7 @@ def test_nome_vazio_retorna_422(client, headers):
 def test_listar_mostra_so_as_do_usuario_em_ordem_alfabetica(client, headers, outro_usuario):
     for nome in ["química", "Álgebra", "Banco de Dados"]:
         criar(client, headers, nome)
-    criar(client, {"X-Usuario-Id": str(outro_usuario.id)}, "De outra pessoa")
+    criar(client, cabecalho(outro_usuario), "De outra pessoa")
 
     resposta = client.get("/disciplinas", headers=headers)
 
@@ -82,7 +85,7 @@ def test_obter_disciplina(client, headers):
 
 
 def test_disciplina_de_outro_usuario_retorna_404(client, headers, outro_usuario):
-    alheia = criar(client, {"X-Usuario-Id": str(outro_usuario.id)}, "Privada").json()
+    alheia = criar(client, cabecalho(outro_usuario), "Privada").json()
 
     assert client.get(f"/disciplinas/{alheia['id']}", headers=headers).status_code == 404
     assert client.patch(
@@ -154,9 +157,11 @@ def test_apagar_disciplina(client, headers):
 # ---------------------------------------------------------- identificação
 
 
-def test_sem_header_de_usuario_retorna_422(client):
-    assert client.get("/disciplinas").status_code == 422
+def test_sem_token_retorna_401(client):
+    resposta = client.get("/disciplinas")
+    assert resposta.status_code == 401
+    assert resposta.headers["www-authenticate"] == "Bearer"
 
 
-def test_usuario_inexistente_retorna_401(client):
-    assert client.get("/disciplinas", headers={"X-Usuario-Id": "999999"}).status_code == 401
+def test_token_invalido_retorna_401(client):
+    assert client.get("/disciplinas", headers={"Authorization": "Bearer abc"}).status_code == 401

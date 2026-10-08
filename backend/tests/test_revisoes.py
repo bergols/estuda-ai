@@ -123,13 +123,6 @@ def test_o_mesmo_instante_e_outro_dia_em_outro_fuso(session, usuario, disciplina
     assert fila.fim_de_hoje == datetime(2026, 10, 8, 15, 0, tzinfo=UTC)  # 09/10 00h em Tóquio
 
 
-def test_criar_usuario_com_fuso_desconhecido_retorna_422(client):
-    resposta = client.post(
-        "/usuarios", json={"nome": "X", "email": "x@x.com", "fuso_horario": "Marte/Olympus"}
-    )
-    assert resposta.status_code == 422
-
-
 # ------------------------------------------------------------ registrar revisão
 
 

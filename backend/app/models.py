@@ -100,6 +100,10 @@ class Usuario(Base):
     fuso_horario: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="America/Sao_Paulo"
     )
+    # Hash argon2id da senha (nunca a senha). NULL = conta sem login.
+    senha_hash: Mapped[str | None] = mapped_column(Text)
+    # Vai dentro do JWT; incrementar invalida todos os tokens do usuário.
+    versao_token: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     criado_em: Mapped[datetime] = criado_em()
     atualizado_em: Mapped[datetime] = atualizado_em()
 
@@ -110,6 +114,8 @@ class Usuario(Base):
     __table_args__ = (
         CheckConstraint("length(trim(nome)) > 0", name="nome_nao_vazio"),
         CheckConstraint("position('@' in email) > 1", name="email_formato"),
+        CheckConstraint("senha_hash LIKE '$argon2id$%'", name="senha_hash_argon2id"),
+        CheckConstraint("versao_token >= 0", name="versao_token_nao_negativa"),
         # Índice de expressão: "Ana@X.com" e "ana@x.com" são o mesmo e-mail.
         Index("uq_usuarios_email_lower", func.lower(email), unique=True),
     )

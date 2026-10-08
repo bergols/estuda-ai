@@ -6,7 +6,7 @@ from sqlalchemy import select, text
 
 from app.models import Trecho
 from app.servicos.embeddings import EmbedderE5
-from tests.conftest import criar_pdf
+from tests.conftest import cabecalho, criar_pdf
 
 TEXTOS = {
     "indices": "Um índice B-tree mantém as chaves ordenadas e evita ler a tabela inteira.",
@@ -175,7 +175,7 @@ def test_parametros_invalidos_retornam_422(client, headers, disciplina_id, param
 
 
 def test_busca_em_disciplina_de_outro_usuario_retorna_404(client, disciplina_id, outro_usuario):
-    resposta = buscar(client, {"X-Usuario-Id": str(outro_usuario.id)}, disciplina_id, "x")
+    resposta = buscar(client, cabecalho(outro_usuario), disciplina_id, "x")
     assert resposta.status_code == 404
 
 

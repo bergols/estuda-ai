@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 import app.servicos.processamento as processamento
 from app.models import Material, Trecho
 from app.servicos.chunking import TrechoGerado
-from tests.conftest import criar_pdf
+from tests.conftest import cabecalho, criar_pdf
 
 PAGINA_1 = "Um índice B-tree mantém as chaves ordenadas. " * 40
 PAGINA_2 = "A busca vetorial compara embeddings por distância de cosseno. " * 40
@@ -114,7 +114,7 @@ def test_mesmo_arquivo_duas_vezes_retorna_409_e_nao_duplica_no_disco(
 
 def test_upload_em_disciplina_de_outro_usuario_retorna_404(client, disciplina_id, outro_usuario):
     resposta = enviar(
-        client, {"X-Usuario-Id": str(outro_usuario.id)}, disciplina_id, criar_pdf([PAGINA_1])
+        client, cabecalho(outro_usuario), disciplina_id, criar_pdf([PAGINA_1])
     )
     assert resposta.status_code == 404
 

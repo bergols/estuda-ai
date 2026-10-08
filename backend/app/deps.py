@@ -1,13 +1,15 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import SessionLocal, get_session
 from app.models import Disciplina, Usuario
+from app.servicos import auth
 from app.servicos.embeddings import Embedder, get_embedder
 from app.servicos.llm import ClienteLLM
 from app.servicos.processamento import FabricaSessao
@@ -40,18 +42,28 @@ def get_fabrica_sessao() -> FabricaSessao:
 FabricaSessaoDep = Annotated[FabricaSessao, Depends(get_fabrica_sessao)]
 
 
-def usuario_atual(
-    session: SessionDep,
-    x_usuario_id: Annotated[int, Header(description="Provisório até a autenticação")],
-) -> Usuario:
-    """Identifica o usuário pelo header X-Usuario-Id.
+# tokenUrl faz o botão "Authorize" do /docs (Swagger) funcionar com e-mail e senha.
+_bearer = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
-    PROVISÓRIO: não há autenticação ainda. Quando houver, só esta função muda
-    (passa a validar um token) e as rotas continuam iguais.
-    """
-    usuario = session.get(Usuario, x_usuario_id)
-    if usuario is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "usuário não identificado")
+
+def usuario_atual(session: SessionDep, token: Annotated[str | None, Depends(_bearer)]) -> Usuario:
+    """O usuário do token "Authorization: Bearer <jwt>". Toda rota que mexe com dados
+    depende desta função, e toda consulta filtra pelo usuário que ela devolve."""
+    nao_autorizado = HTTPException(
+        status.HTTP_401_UNAUTHORIZED,
+        "não autenticado",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if token is None:
+        raise nao_autorizado
+    try:
+        usuario_id, versao = auth.ler_token(token)
+    except auth.ErroAuth as erro:
+        raise nao_autorizado from erro
+    usuario = session.get(Usuario, usuario_id)
+    # versão diferente = token revogado ("sair de todos" ou troca de senha)
+    if usuario is None or usuario.versao_token != versao:
+        raise nao_autorizado
     return usuario
 
 

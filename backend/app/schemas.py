@@ -25,13 +25,6 @@ Nome = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 Descricao = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
 
 
-class UsuarioCriar(BaseModel):
-    nome: Nome
-    email: EmailStr
-    # Validado no banco (trigger trg_usuarios_fuso_valido): fuso desconhecido -> 422.
-    fuso_horario: str = Field(default="America/Sao_Paulo", max_length=64)
-
-
 class UsuarioLer(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -387,3 +380,12 @@ class Serie[T](BaseModel):
 class AtualizacaoMVSaida(BaseModel):
     atualizado_em: datetime
     duracao_ms: int
+
+
+# ------------------------------------------------------------------ fase 6
+
+
+class TokenSaida(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expira_em: datetime

@@ -26,6 +26,7 @@ from app.db import get_session
 from app.deps import get_fabrica_sessao, get_llm
 from app.main import app
 from app.models import Usuario
+from app.servicos.auth import emitir_token
 from app.servicos.embeddings import get_embedder
 from app.servicos.llm import ClienteLLM
 from tests.fakes import AnthropicFalso, EmbedderFalso
@@ -159,9 +160,15 @@ def outro_usuario(session):
     return _criar_usuario(session, "Bruno", "bruno@furg.br")
 
 
+def cabecalho(usuario) -> dict:
+    """Authorization com um JWT válido para o usuário (sem passar pelo login, que
+    custaria um hash argon2 por teste; o login tem testes próprios em test_auth.py)."""
+    return {"Authorization": f"Bearer {emitir_token(usuario).valor}"}
+
+
 @pytest.fixture
 def headers(usuario):
-    return {"X-Usuario-Id": str(usuario.id)}
+    return cabecalho(usuario)
 
 
 @pytest.fixture
