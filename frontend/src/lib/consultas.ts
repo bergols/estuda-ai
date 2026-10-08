@@ -21,6 +21,7 @@ export const chaves = {
   fila: ["revisoes", "hoje"] as const,
   gastos: ["gastos"] as const,
   sessoes: ["sessoes"] as const,
+  spotify: ["spotify"] as const,
   analytics: (rota: string, disciplinaId?: number) => ["analytics", rota, disciplinaId ?? "todas"] as const,
 };
 
@@ -231,6 +232,38 @@ export function useSessoes() {
   return useQuery({
     queryKey: chaves.sessoes,
     queryFn: () => dados(api.GET("/sessoes", { params: { query: { limite: 30 } } })),
+  });
+}
+
+// ------------------------------------------------------------------ Spotify
+
+/** Conectado? Playlists escolhidas e o que fazer no intervalo (nunca traz token). */
+export function useSpotify() {
+  return useQuery({ queryKey: chaves.spotify, queryFn: () => dados(api.GET("/spotify")) });
+}
+
+export function useMinhasPlaylists(conectado: boolean) {
+  return useQuery({
+    queryKey: [...chaves.spotify, "playlists"],
+    queryFn: () => dados(api.GET("/spotify/minhas-playlists")),
+    enabled: conectado,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useSalvarSpotify() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: (corpo: Esquemas["SpotifyPreferencias"]) => dados(api.PUT("/spotify/preferencias", { body: corpo })),
+    onSuccess: (estado) => cliente.setQueryData(chaves.spotify, estado),
+  });
+}
+
+export function useDesconectarSpotify() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: () => dados(api.DELETE("/spotify")),
+    onSuccess: () => cliente.invalidateQueries({ queryKey: chaves.spotify }),
   });
 }
 

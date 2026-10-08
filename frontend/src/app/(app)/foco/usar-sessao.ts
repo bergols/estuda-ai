@@ -13,7 +13,7 @@ import {
   configDe,
   type SessaoAtiva,
 } from "@/lib/foco/sessao";
-import { momento, plano } from "@/lib/foco/timer";
+import { type Fase, momento, plano } from "@/lib/foco/timer";
 
 export const novaChave = () => crypto.randomUUID();
 
@@ -62,22 +62,24 @@ export function useSessao(inicial: SessaoAtiva | null) {
 export function useRelogio(
   sessao: SessaoAtiva | null,
   mudar: (f: (s: SessaoAtiva) => SessaoAtiva | null) => void,
-  aoMudarDeFase: (indice: number) => void,
+  aoMudarDeFase: (de: Fase, para: Fase | null) => void,
 ) {
   const [agora, setAgora] = useState(() => Date.now());
   const ativa = sessao?.dados.status === "em_andamento";
-  const faseAnterior = useRef<number | null>(null);
+  const faseAnterior = useRef<{ indice: number; fase: Fase | null } | null>(null);
 
   useEffect(() => {
     if (!ativa) return;
+    faseAnterior.current = null; // sessão nova: nada de "mudança" vinda da anterior
     const tick = () => {
       const t = Date.now();
       setAgora(t);
       mudar((s) => {
         if (s.dados.status !== "em_andamento") return s;
         const m = momento(plano(configDe(s.dados)), s.local.timer, t);
-        if (faseAnterior.current !== null && faseAnterior.current !== m.indice) aoMudarDeFase(m.indice);
-        faseAnterior.current = m.indice;
+        const antes = faseAnterior.current;
+        if (antes?.fase && antes.indice !== m.indice) aoMudarDeFase(antes.fase, m.fase);
+        faseAnterior.current = { indice: m.indice, fase: m.fase };
         if (m.terminado) return encerrar(s, t, novaChave);
         const comPausas = registrarPausasPlanejadas(s, t, novaChave);
         return precisaBatida(comPausas, t) ? bater(comPausas, t) : comPausas;

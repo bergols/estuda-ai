@@ -2,11 +2,12 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Botao, Cabecalho, Carregando, Secao } from "@/components/ui";
 import { useDisciplinas } from "@/lib/consultas";
 import { tocarAviso } from "@/lib/foco/aviso";
+import type { Momento } from "@/lib/foco/musica";
 import { sessaoEmAndamento } from "@/lib/foco/local";
 import {
   continuarAposFechamento,
@@ -26,8 +27,10 @@ import { DESKTOP } from "@/lib/plataforma";
 
 import { NOMES_METODO, Configuracao, type Escolha } from "./configuracao";
 import { Historico } from "./historico";
+import { Musica } from "./musica";
 import { RodapeSincronia } from "./rodape-sincronia";
 import { TelaDeFoco } from "./tela-de-foco";
+import { useMusica, useMusicaAtual } from "./usar-musica";
 import { novaChave, useRelogio, useSessao, useSituacaoSincronia } from "./usar-sessao";
 
 export function Foco() {
@@ -44,6 +47,9 @@ function FocoWeb() {
       </p>
       <Secao titulo="Últimas sessões">
         <Historico />
+      </Secao>
+      <Secao titulo="Música (Spotify)">
+        <Musica />
       </Secao>
     </>
   );
@@ -65,8 +71,34 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
   const sincronia = useSituacaoSincronia();
   const disciplinas = useDisciplinas();
   const [sistema, setSistema] = useState<SessaoEnvio["sistema"]>("macos");
-  const agora = useRelogio(sessao, mudar, useCallback(() => tocarAviso(), []));
+  const musica = useMusica();
   const ativa = sessao?.dados.status === "em_andamento";
+  const tocando = useMusicaAtual(ativa, musica.conectado);
+
+  // A música de cada momento. A sessão atual fica numa ref para o callback do relógio
+  // ser estável (senão o intervalo de 250 ms reiniciaria a cada render).
+  const sessaoAtual = useRef(sessao);
+  useEffect(() => {
+    sessaoAtual.current = sessao;
+  }, [sessao]);
+  const musicaEm = useCallback(
+    (momento: Momento, s: SessaoAtiva | null = sessaoAtual.current) => {
+      if (s) musica.executar(momento, { metodo: s.dados.metodo, disciplinaId: s.dados.disciplina_id ?? null });
+    },
+    [musica],
+  );
+  const musicaRef = useRef(musicaEm);
+  useEffect(() => {
+    musicaRef.current = musicaEm;
+  }, [musicaEm]);
+  const agora = useRelogio(
+    sessao,
+    mudar,
+    useCallback((de, para) => {
+      tocarAviso();
+      musicaRef.current(para ? { tipo: "fase", de: de.tipo, para: para.tipo } : { tipo: "fim" });
+    }, []),
+  );
 
   useEffect(() => {
     invoke<SessaoEnvio["sistema"]>("sistema").then(setSistema, () => {});
@@ -97,7 +129,9 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
     id == null ? null : (disciplinas.data?.find((d) => d.id === id)?.nome ?? null);
 
   function comecarSessao(e: Escolha) {
-    comecar(novaSessao({ ...e, sistema, agora: Date.now(), novaChave }));
+    const nova = novaSessao({ ...e, sistema, agora: Date.now(), novaChave });
+    comecar(nova);
+    musicaEm({ tipo: "inicio" }, nova);
   }
 
   if (sessao && ativa) {
@@ -107,9 +141,20 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
         agora={agora}
         disciplina={nomeDisciplina(sessao.dados.disciplina_id)}
         sincronia={sincronia}
-        aoPausar={() => mudar((s) => pausarSessao(s, Date.now()))}
-        aoRetomar={() => mudar((s) => retomarSessao(s, Date.now(), novaChave))}
-        aoEncerrar={() => mudar((s) => encerrar(s, Date.now(), novaChave))}
+        musica={tocando}
+        avisoMusica={musica.aviso}
+        aoPausar={() => {
+          mudar((s) => pausarSessao(s, Date.now()));
+          musicaEm({ tipo: "pausa_manual" });
+        }}
+        aoRetomar={() => {
+          mudar((s) => retomarSessao(s, Date.now(), novaChave));
+          musicaEm({ tipo: "retomada_manual" });
+        }}
+        aoEncerrar={() => {
+          mudar((s) => encerrar(s, Date.now(), novaChave));
+          musicaEm({ tipo: "fim" });
+        }}
       />
     );
   }
@@ -127,7 +172,9 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
         <Recuperacao
           sessao={recuperar}
           aoContinuar={() => {
-            comecar(continuarAposFechamento(recuperar, Date.now(), novaChave));
+            const continuada = continuarAposFechamento(recuperar, Date.now(), novaChave);
+            comecar(continuada);
+            musicaEm({ tipo: "inicio" }, continuada);
             setRecuperar(null);
           }}
           aoEncerrar={() => {
@@ -142,6 +189,10 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
           <Configuracao aoComecar={comecarSessao} />
         </Secao>
       )}
+
+      <Secao titulo="Música (Spotify)">
+        <Musica />
+      </Secao>
 
       <Secao titulo="Últimas sessões">
         <Historico />
