@@ -705,6 +705,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/spotify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado
+         * @description Conectado ou não, com as playlists escolhidas e a preferência do intervalo.
+         *     Nunca devolve token.
+         */
+        get: operations["estado_spotify_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Desconectar
+         * @description Apaga a conexão guardada (as playlists escolhidas continuam). Para revogar também
+         *     no Spotify: spotify.com/account/apps.
+         */
+        delete: operations["desconectar_spotify_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/spotify/conectar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Conectar
+         * @description Troca o código da autorização (PKCE) pelos tokens e guarda o refresh cifrado.
+         */
+        post: operations["conectar_spotify_conectar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/spotify/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Config
+         * @description O que o app desktop precisa para montar a URL de autorização (público no PKCE).
+         */
+        get: operations["config_spotify_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/spotify/minhas-playlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Minhas Playlists
+         * @description As playlists da conta (para escolher na configuração).
+         */
+        get: operations["minhas_playlists_spotify_minhas_playlists_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/spotify/preferencias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Preferencias
+         * @description Troca toda a configuração de música (numa transação: ou tudo, ou nada).
+         */
+        put: operations["preferencias_spotify_preferencias_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/spotify/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Token
+         * @description Access token válido por pelo menos 2 minutos (renova se preciso). POST: pode
+         *     mudar estado (renovação) e devolve um segredo; não deve ficar em cache.
+         */
+        post: operations["token_spotify_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1264,6 +1391,17 @@ export interface components {
             /** Pergunta */
             pergunta: string;
         };
+        /** PlaylistDoSpotify */
+        PlaylistDoSpotify: {
+            /** Dono */
+            dono: string | null;
+            /** Imagem */
+            imagem: string | null;
+            /** Nome */
+            nome: string;
+            /** Uri */
+            uri: string;
+        };
         /** PrevisaoDia */
         PrevisaoDia: {
             /** Atrasados */
@@ -1655,6 +1793,88 @@ export interface components {
             status: "em_andamento" | "concluida" | "abandonada";
             /** Terminada Em */
             terminada_em: string | null;
+        };
+        /** SpotifyConectar */
+        SpotifyConectar: {
+            /** Code */
+            code: string;
+            /** Code Verifier */
+            code_verifier: string;
+            /** Redirect Uri */
+            redirect_uri: string;
+        };
+        /** SpotifyConfig */
+        SpotifyConfig: {
+            /** Client Id */
+            client_id: string;
+            /** Escopos */
+            escopos: string;
+        };
+        /** SpotifyEstado */
+        SpotifyEstado: {
+            /** Conectado */
+            conectado: boolean;
+            /** Conectado Em */
+            conectado_em: string | null;
+            /**
+             * No Intervalo
+             * @enum {string}
+             */
+            no_intervalo: "pausar" | "trocar" | "continuar";
+            /** Nome */
+            nome: string | null;
+            /** Playlists */
+            playlists: components["schemas"]["SpotifyPlaylistConfig"][];
+            /** Spotify Id */
+            spotify_id: string | null;
+        };
+        /** SpotifyPlaylistConfig */
+        SpotifyPlaylistConfig: {
+            /**
+             * Alvo
+             * @enum {string}
+             */
+            alvo: "padrao" | "metodo" | "disciplina" | "intervalo";
+            /** Disciplina Id */
+            disciplina_id?: number | null;
+            /** Metodo */
+            metodo?: ("pomodoro" | "bloco" | "52_17" | "personalizado") | null;
+            /** Nome */
+            nome: string;
+            /** Uri */
+            uri: string;
+        };
+        /** SpotifyPreferencias */
+        SpotifyPreferencias: {
+            /**
+             * No Intervalo
+             * @default pausar
+             * @enum {string}
+             */
+            no_intervalo?: "pausar" | "trocar" | "continuar";
+            /**
+             * Playlists
+             * @default []
+             */
+            playlists?: components["schemas"]["SpotifyPlaylistConfig"][];
+        };
+        /** SpotifyToken */
+        SpotifyToken: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Expira Em
+             * Format: date-time
+             */
+            expira_em: string;
+        };
+        /** SpotifyTokenEntrada */
+        SpotifyTokenEntrada: {
+            /**
+             * Forcar
+             * @default false
+             */
+            forcar?: boolean;
         };
         /** TentativaEntrada */
         TentativaEntrada: {
@@ -2982,6 +3202,183 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultadoSincronizacao"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estado_spotify_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpotifyEstado"];
+                };
+            };
+        };
+    };
+    desconectar_spotify_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    conectar_spotify_conectar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpotifyConectar"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpotifyEstado"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    config_spotify_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpotifyConfig"];
+                };
+            };
+        };
+    };
+    minhas_playlists_spotify_minhas_playlists_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistDoSpotify"][];
+                };
+            };
+        };
+    };
+    preferencias_spotify_preferencias_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpotifyPreferencias"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpotifyEstado"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    token_spotify_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpotifyTokenEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpotifyToken"];
                 };
             };
             /** @description Validation Error */

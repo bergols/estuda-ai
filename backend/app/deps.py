@@ -4,6 +4,7 @@ from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
 
+import httpx
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
@@ -13,9 +14,11 @@ from app.config import Settings, get_settings
 from app.db import SessionLocal, get_session
 from app.models import Disciplina, Usuario
 from app.servicos import auth, limites
+from app.servicos.cifra import Cifra, ErroCifra
 from app.servicos.embeddings import Embedder, get_embedder
 from app.servicos.llm import ClienteLLM
 from app.servicos.processamento import FabricaSessao
+from app.servicos.spotify import ClienteSpotify
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -43,6 +46,47 @@ def get_fabrica_sessao() -> FabricaSessao:
 
 
 FabricaSessaoDep = Annotated[FabricaSessao, Depends(get_fabrica_sessao)]
+
+
+# ------------------------------------------------------------- Spotify (fase 7)
+
+_NAO_CONFIGURADO = "o Spotify não está configurado neste servidor"
+
+
+@lru_cache
+def _cifra(texto: str) -> Cifra:
+    return Cifra.de_texto(texto)
+
+
+def get_cifra(settings: SettingsDep) -> Cifra:
+    """Sem CIFRA_CHAVES (ou com ela inválida), nada de Spotify: 503 em vez de guardar
+    token sem cifra."""
+    if settings.cifra_chaves is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NAO_CONFIGURADO + " (CIFRA_CHAVES)")
+    try:
+        return _cifra(settings.cifra_chaves.get_secret_value())
+    except ErroCifra as erro:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(erro)) from erro
+
+
+@lru_cache
+def _cliente_spotify(client_id: str) -> ClienteSpotify:
+    return ClienteSpotify(client_id, httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0)))
+
+
+def exigir_client_id(settings: Settings) -> str:
+    if not settings.spotify_client_id:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NAO_CONFIGURADO + " (SPOTIFY_CLIENT_ID)")
+    return settings.spotify_client_id
+
+
+def get_spotify(settings: SettingsDep) -> ClienteSpotify:
+    """Nos testes é substituído por um ClienteSpotify com o SpotifyFalso (tests/fakes.py)."""
+    return _cliente_spotify(exigir_client_id(settings))
+
+
+CifraDep = Annotated[Cifra, Depends(get_cifra)]
+SpotifyDep = Annotated[ClienteSpotify, Depends(get_spotify)]
 
 
 # tokenUrl faz o botão "Authorize" do /docs (Swagger) funcionar com e-mail e senha.

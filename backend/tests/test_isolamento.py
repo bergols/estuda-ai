@@ -10,6 +10,7 @@ O meta-teste no fim lê as rotas do OpenAPI: uma rota nova sem caso aqui faz o t
 falhar, para ninguém esquecer de pensar no isolamento dela.
 """
 
+import base64
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -27,11 +28,15 @@ from app.models import (
     Material,
     Questao,
     Revisao,
+    PreferenciasFoco,
     SessaoEstudo,
+    SpotifyConta,
+    SpotifyPlaylist,
     Tentativa,
     Trecho,
 )
 from app.servicos import analytics
+from app.servicos.cifra import Cifra
 from tests.conftest import cabecalho, criar_pdf
 
 PUBLICAS = {("GET", "/health"), ("POST", "/auth/login")}
@@ -71,6 +76,17 @@ def vitima(session, outro_usuario, usuario):
                              meta="meta secreta", sistema="macos", status="concluida",
                              iniciada_em=agora - timedelta(hours=2),
                              terminada_em=agora - timedelta(hours=1, minutes=30)))
+    # Spotify da vítima (fase 7): conta conectada (cifrada com a chave de teste do
+    # settings_teste), playlist da disciplina dela e preferência do intervalo
+    cifra = Cifra.de_texto("1:" + base64.b64encode(bytes(32)).decode())
+    session.add(SpotifyConta(
+        usuario_id=outro_usuario.id, spotify_id="vitima-spotify", nome="Vítima", escopos="x",
+        refresh_token=cifra.cifrar("refresh-da-vitima", f"spotify:{outro_usuario.id}:refresh"),
+        access_token=cifra.cifrar("access-da-vitima", f"spotify:{outro_usuario.id}:access"),
+        access_expira_em=agora + timedelta(hours=1)))
+    session.add(SpotifyPlaylist(usuario_id=outro_usuario.id, alvo="disciplina", disciplina_id=d.id,
+                                uri="spotify:playlist:37i9dQZF1DX8Uebhn9wzrS", nome="Playlist secreta"))
+    session.add(PreferenciasFoco(usuario_id=outro_usuario.id, spotify_no_intervalo="trocar"))
     # disciplina do PRÓPRIO atacante, para os casos "misturados"
     propria = Disciplina(usuario_id=usuario.id, nome="Minha")
     session.add(propria)
@@ -115,11 +131,25 @@ CASOS_404 = [
     ("GET", "/analytics/previsao?disciplina_id={d}", {}),
     ("GET", "/analytics/calendario?disciplina_id={d}", {}),
     ("GET", "/analytics/custos?disciplina_id={d}", {}),
+    # Spotify: o atacante não está conectado; nunca recebe o token da vítima
+    ("POST", "/spotify/token", {"json": {"forcar": False}}),
+    ("POST", "/spotify/token", {"json": {"forcar": True}}),
+    ("GET", "/spotify/minhas-playlists", {}),
+    # Playlist apontando para a disciplina da vítima: 404 (FK composta), nada gravado
+    ("PUT", "/spotify/preferencias", {"json": lambda vitima: {"playlists": [{
+        "alvo": "disciplina", "disciplina_id": vitima["d"],
+        "uri": "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS", "nome": "minha?"}]}}),
 ]
 
 
-def _corpo(kwargs):
-    return {k: (v() if callable(v) else v) for k, v in kwargs.items()}
+def _corpo(kwargs, vitima=None):
+    """Valores chamáveis viram o corpo na hora: sem argumento (o PDF) ou com os ids da
+    vítima (corpos que citam um id dela)."""
+    def valor(v):
+        if not callable(v):
+            return v
+        return v(vitima) if v.__code__.co_argcount else v()
+    return {k: valor(v) for k, v in kwargs.items()}
 
 
 @pytest.mark.parametrize(("metodo", "caminho", "kwargs"), CASOS_404,
@@ -127,7 +157,7 @@ def _corpo(kwargs):
 def test_ids_da_vitima_dao_404(client, headers, vitima, metodo, caminho, kwargs):
     # anthropic_falso está sem roteiro: se alguma rota chegasse a chamar o LLM com
     # o material da vítima, o teste quebraria (além de dar o status errado).
-    resposta = client.request(metodo, caminho.format(**vitima), headers=headers, **_corpo(kwargs))
+    resposta = client.request(metodo, caminho.format(**vitima), headers=headers, **_corpo(kwargs, vitima))
     assert resposta.status_code == 404, resposta.text
 
 
@@ -162,6 +192,10 @@ CASOS_LISTAS = [
     ("GET", "/analytics/foco/horas", lambda r: _zero(sum(x["sessoes"] for x in r.json()["dados"]))),
     ("GET", "/analytics/foco/sessoes", lambda r: _zero(r.json()["dados"][-1]["sessoes"])),
     ("GET", "/analytics/foco/interrupcoes", lambda r: _vazio(r.json()["dados"])),
+    ("GET", "/spotify", lambda r: _spotify_vazio(r.json())),
+    ("GET", "/spotify/config", _sem_texto_secreto),
+    ("DELETE", "/spotify", lambda r: None),  # apaga só a do próprio (conferido abaixo)
+    ("POST", "/spotify/conectar", lambda r: _conectou_a_propria(r.json())),
     # As respostas da vítima (revisão e tentativa de 1 h atrás, logo depois da sessão
     # dela) não podem aparecer em grupo nenhum
     ("GET", "/analytics/foco/acerto-pos-sessao",
@@ -171,6 +205,16 @@ CASOS_LISTAS = [
     ("POST", "/sessoes/sincronizar",
      lambda r: _sessao_isolada(r.json()["sessoes"][0])),
 ]
+
+
+def _spotify_vazio(estado):
+    assert (estado["conectado"], estado["nome"], estado["playlists"]) == (False, None, [])
+    assert estado["no_intervalo"] == "pausar"  # o padrão, não o "trocar" da vítima
+
+
+def _conectou_a_propria(estado):
+    assert estado["conectado"] is True and estado["nome"] == "Bergola"  # perfil do SpotifyFalso
+    assert estado["playlists"] == []
 
 
 def _sessao_isolada(resultado):
@@ -188,6 +232,9 @@ def _corpo_da_rota(metodo, caminho, vitima):
             "status": "abandonada", "iniciada_em": "2026-10-08T10:00:00+00:00",
             "terminada_em": "2026-10-08T10:05:00+00:00",
         }]}}
+    if (metodo, caminho) == ("POST", "/spotify/conectar"):
+        return {"json": {"code": "codigo-bom", "code_verifier": "v" * 43,
+                         "redirect_uri": "http://127.0.0.1:43821/callback"}}
     return {}
 
 
@@ -209,7 +256,7 @@ def test_rotas_sem_id_nao_mostram_dados_da_vitima(client, headers, vitima, metod
 
 def test_nada_da_vitima_mudou(client, headers, vitima, session, outro_usuario):
     for metodo, caminho, kwargs in CASOS_404:
-        client.request(metodo, caminho.format(**vitima), headers=headers, **_corpo(kwargs))
+        client.request(metodo, caminho.format(**vitima), headers=headers, **_corpo(kwargs, vitima))
     # Rotas sem id, com o token ainda válido (o "sair de todos" fica por último)
     for metodo, caminho, _ in CASOS_LISTAS:
         if caminho != "/auth/sair-de-todos":
@@ -229,6 +276,11 @@ def test_nada_da_vitima_mudou(client, headers, vitima, session, outro_usuario):
         {"c": CHAVE_DA_VITIMA, "u": outro_usuario.id},
     ).one()
     assert tuple(linha) == ("concluida", vitima["d"])
+    # a conexão do Spotify, a playlist e a preferência da vítima continuam
+    assert session.get(SpotifyConta, outro_usuario.id) is not None
+    assert session.scalar(text("SELECT count(*) FROM spotify_playlists WHERE usuario_id = :u"),
+                          {"u": outro_usuario.id}) == 1
+    assert session.get(PreferenciasFoco, outro_usuario.id).spotify_no_intervalo == "trocar"
     # o "sair de todos" do atacante não derrubou a vítima
     assert client.get("/auth/eu", headers=cabecalho(outro_usuario)).status_code == 200
 

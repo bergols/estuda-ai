@@ -1487,6 +1487,48 @@
         "title": "PerguntaEntrada",
         "type": "object"
       },
+      "PlaylistDoSpotify": {
+        "properties": {
+          "dono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dono"
+          },
+          "imagem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imagem"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uri",
+          "nome",
+          "dono",
+          "imagem"
+        ],
+        "title": "PlaylistDoSpotify",
+        "type": "object"
+      },
       "PrevisaoDia": {
         "properties": {
           "atrasados": {
@@ -2835,6 +2877,234 @@
           "foco_efetivo_s"
         ],
         "title": "SessaoLer",
+        "type": "object"
+      },
+      "SpotifyConectar": {
+        "properties": {
+          "code": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "code_verifier": {
+            "pattern": "^[A-Za-z0-9\\-._~]{43,128}$",
+            "title": "Code Verifier",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "maxLength": 200,
+            "title": "Redirect Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "code_verifier",
+          "redirect_uri"
+        ],
+        "title": "SpotifyConectar",
+        "type": "object"
+      },
+      "SpotifyConfig": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "escopos": {
+            "title": "Escopos",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "escopos"
+        ],
+        "title": "SpotifyConfig",
+        "type": "object"
+      },
+      "SpotifyEstado": {
+        "properties": {
+          "conectado": {
+            "title": "Conectado",
+            "type": "boolean"
+          },
+          "conectado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conectado Em"
+          },
+          "no_intervalo": {
+            "enum": [
+              "pausar",
+              "trocar",
+              "continuar"
+            ],
+            "title": "No Intervalo",
+            "type": "string"
+          },
+          "nome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome"
+          },
+          "playlists": {
+            "items": {
+              "$ref": "#/components/schemas/SpotifyPlaylistConfig"
+            },
+            "title": "Playlists",
+            "type": "array"
+          },
+          "spotify_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spotify Id"
+          }
+        },
+        "required": [
+          "conectado",
+          "nome",
+          "spotify_id",
+          "conectado_em",
+          "no_intervalo",
+          "playlists"
+        ],
+        "title": "SpotifyEstado",
+        "type": "object"
+      },
+      "SpotifyPlaylistConfig": {
+        "properties": {
+          "alvo": {
+            "enum": [
+              "padrao",
+              "metodo",
+              "disciplina",
+              "intervalo"
+            ],
+            "title": "Alvo",
+            "type": "string"
+          },
+          "disciplina_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disciplina Id"
+          },
+          "metodo": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pomodoro",
+                  "bloco",
+                  "52_17",
+                  "personalizado"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metodo"
+          },
+          "nome": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Nome",
+            "type": "string"
+          },
+          "uri": {
+            "pattern": "^spotify:(playlist|album|artist):[A-Za-z0-9]{22}$",
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alvo",
+          "uri",
+          "nome"
+        ],
+        "title": "SpotifyPlaylistConfig",
+        "type": "object"
+      },
+      "SpotifyPreferencias": {
+        "properties": {
+          "no_intervalo": {
+            "default": "pausar",
+            "enum": [
+              "pausar",
+              "trocar",
+              "continuar"
+            ],
+            "title": "No Intervalo",
+            "type": "string"
+          },
+          "playlists": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SpotifyPlaylistConfig"
+            },
+            "maxItems": 100,
+            "title": "Playlists",
+            "type": "array"
+          }
+        },
+        "title": "SpotifyPreferencias",
+        "type": "object"
+      },
+      "SpotifyToken": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expira_em": {
+            "format": "date-time",
+            "title": "Expira Em",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expira_em"
+        ],
+        "title": "SpotifyToken",
+        "type": "object"
+      },
+      "SpotifyTokenEntrada": {
+        "properties": {
+          "forcar": {
+            "default": false,
+            "title": "Forcar",
+            "type": "boolean"
+          }
+        },
+        "title": "SpotifyTokenEntrada",
         "type": "object"
       },
       "TentativaEntrada": {
@@ -5549,6 +5819,250 @@
         "summary": "Sincronizar",
         "tags": [
           "sessoes"
+        ]
+      }
+    },
+    "/spotify": {
+      "delete": {
+        "description": "Apaga a conexão guardada (as playlists escolhidas continuam). Para revogar também\nno Spotify: spotify.com/account/apps.",
+        "operationId": "desconectar_spotify_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Desconectar",
+        "tags": [
+          "spotify"
+        ]
+      },
+      "get": {
+        "description": "Conectado ou não, com as playlists escolhidas e a preferência do intervalo.\nNunca devolve token.",
+        "operationId": "estado_spotify_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyEstado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Estado",
+        "tags": [
+          "spotify"
+        ]
+      }
+    },
+    "/spotify/conectar": {
+      "post": {
+        "description": "Troca o código da autorização (PKCE) pelos tokens e guarda o refresh cifrado.",
+        "operationId": "conectar_spotify_conectar_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpotifyConectar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyEstado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Conectar",
+        "tags": [
+          "spotify"
+        ]
+      }
+    },
+    "/spotify/config": {
+      "get": {
+        "description": "O que o app desktop precisa para montar a URL de autorização (público no PKCE).",
+        "operationId": "config_spotify_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Config",
+        "tags": [
+          "spotify"
+        ]
+      }
+    },
+    "/spotify/minhas-playlists": {
+      "get": {
+        "description": "As playlists da conta (para escolher na configuração).",
+        "operationId": "minhas_playlists_spotify_minhas_playlists_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlaylistDoSpotify"
+                  },
+                  "title": "Response Minhas Playlists Spotify Minhas Playlists Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Minhas Playlists",
+        "tags": [
+          "spotify"
+        ]
+      }
+    },
+    "/spotify/preferencias": {
+      "put": {
+        "description": "Troca toda a configuração de música (numa transação: ou tudo, ou nada).",
+        "operationId": "preferencias_spotify_preferencias_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpotifyPreferencias"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyEstado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Preferencias",
+        "tags": [
+          "spotify"
+        ]
+      }
+    },
+    "/spotify/token": {
+      "post": {
+        "description": "Access token válido por pelo menos 2 minutos (renova se preciso). POST: pode\nmudar estado (renovação) e devolve um segredo; não deve ficar em cache.",
+        "operationId": "token_spotify_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpotifyTokenEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpotifyToken"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Token",
+        "tags": [
+          "spotify"
         ]
       }
     }

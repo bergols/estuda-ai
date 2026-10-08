@@ -14,27 +14,31 @@ teste que dependesse de um privilégio que a API não tem falharia aqui, e não 
 depois do deploy. `engine_dono` existe para os poucos testes de administração.
 """
 
+import base64
 from contextlib import contextmanager
 from pathlib import Path
 
+import httpx
 import pymupdf
 import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_session
-from app.deps import get_fabrica_sessao, get_llm
+from app.deps import exigir_client_id, get_fabrica_sessao, get_llm, get_spotify
 from app.main import app
 from app.models import Usuario
 from app.servicos.auth import emitir_token
 from app.servicos.embeddings import get_embedder
 from app.servicos.llm import ClienteLLM
-from tests.fakes import AnthropicFalso, EmbedderFalso
+from app.servicos.spotify import ClienteSpotify
+from tests.fakes import AnthropicFalso, EmbedderFalso, SpotifyFalso
 
 MODELO_TESTE = "claude-haiku-4-5-20251001"
 PAPEL_APP = "estuda_ai_app"
@@ -163,20 +167,33 @@ def anthropic_falso():
 
 
 @pytest.fixture
-def settings_teste(pasta_uploads):
-    """Configurações usadas pela API nos testes; um teste pode mudar um campo
-    (ex.: settings_teste.limite_geracoes_dia = 2) antes de chamar a rota."""
-    return get_settings().model_copy(update={"upload_dir": pasta_uploads, "max_upload_mb": 1})
+def spotify_falso():
+    """Spotify simulado (tokens + Web API); nenhum teste fala com o Spotify real."""
+    return SpotifyFalso()
 
 
 @pytest.fixture
-def client(session, embedder, fabrica, anthropic_falso, settings_teste):
+def settings_teste(pasta_uploads):
+    """Configurações usadas pela API nos testes; um teste pode mudar um campo
+    (ex.: settings_teste.limite_geracoes_dia = 2) antes de chamar a rota."""
+    return get_settings().model_copy(update={
+        "upload_dir": pasta_uploads, "max_upload_mb": 1,
+        # Chave fixa só de teste (32 bytes zero em base64); nunca use algo assim de verdade
+        "cifra_chaves": SecretStr("1:" + base64.b64encode(bytes(32)).decode()),
+        "spotify_client_id": "client-id-de-teste",
+    })
+
+
+@pytest.fixture
+def client(session, embedder, fabrica, anthropic_falso, spotify_falso, settings_teste):
     settings = settings_teste
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_embedder] = lambda: embedder
     app.dependency_overrides[get_fabrica_sessao] = lambda: fabrica
     app.dependency_overrides[get_llm] = lambda: ClienteLLM(MODELO_TESTE, cliente=anthropic_falso)
+    app.dependency_overrides[get_spotify] = lambda: ClienteSpotify(
+        exigir_client_id(settings), httpx.Client(transport=spotify_falso.transport))
     # O TestClient só devolve a resposta depois de rodar as BackgroundTasks,
     # então ao fim de um client.post(...) o processamento já terminou.
     with TestClient(app) as c:

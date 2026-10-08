@@ -514,3 +514,63 @@ class SessaoLer(BaseModel):
     interrupcoes: int
     emergencias: int
     foco_efetivo_s: int | None
+
+
+# ------------------------------------------------------------------- Spotify (fase 7)
+
+
+class SpotifyConfig(BaseModel):
+    client_id: str
+    escopos: str
+
+
+class SpotifyConectar(BaseModel):
+    code: str = Field(min_length=1, max_length=2000)
+    # RFC 7636: verifier de 43 a 128 caracteres [A-Za-z0-9-._~]
+    code_verifier: str = Field(pattern=r"^[A-Za-z0-9\-._~]{43,128}$")
+    redirect_uri: str = Field(max_length=200)
+
+
+class SpotifyTokenEntrada(BaseModel):
+    # O app pede um token novo à força quando o Spotify recusou o guardado (401)
+    forcar: bool = False
+
+
+class SpotifyToken(BaseModel):
+    access_token: str
+    expira_em: datetime
+
+
+AlvoPlaylist = Literal["padrao", "metodo", "disciplina", "intervalo"]
+
+
+class SpotifyPlaylistConfig(BaseModel):
+    alvo: AlvoPlaylist
+    metodo: Literal["pomodoro", "bloco", "52_17", "personalizado"] | None = None
+    disciplina_id: int | None = None
+    uri: str = Field(pattern=r"^spotify:(playlist|album|artist):[A-Za-z0-9]{22}$")
+    nome: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+NoIntervalo = Literal["pausar", "trocar", "continuar"]
+
+
+class SpotifyPreferencias(BaseModel):
+    no_intervalo: NoIntervalo = "pausar"
+    playlists: list[SpotifyPlaylistConfig] = Field(default=[], max_length=100)
+
+
+class SpotifyEstado(BaseModel):
+    conectado: bool
+    nome: str | None
+    spotify_id: str | None
+    conectado_em: datetime | None
+    no_intervalo: NoIntervalo
+    playlists: list[SpotifyPlaylistConfig]
+
+
+class PlaylistDoSpotify(BaseModel):
+    uri: str
+    nome: str
+    dono: str | None
+    imagem: str | None

@@ -90,3 +90,86 @@ class AnthropicFalso:
             usage=SimpleNamespace(input_tokens=self.tokens_entrada, output_tokens=self.tokens_saida),
             stop_reason="end_turn",
         )
+
+
+class SpotifyFalso:
+    """O Spotify simulado (servidor de tokens + Web API) num httpx.MockTransport.
+
+    Como o de verdade, pode TROCAR o refresh token a cada renovação (rotacionar=True):
+    o antigo deixa de valer e usá-lo dá 400 invalid_grant. É isso que torna perigosa
+    a renovação simultânea sem lock. `atraso_renovacao` segura a resposta para forçar
+    a sobreposição nos testes de concorrência. Seguro para várias threads.
+    """
+
+    VERIFIER_ESPERADO = "v" * 43
+
+    def __init__(self, rotacionar: bool = True):
+        import threading
+
+        self.rotacionar = rotacionar
+        self.atraso_renovacao = 0.0
+        self.renovacoes = 0
+        self.refresh_valido = "refresh-1"
+        self.access_atual = "access-1"
+        self.revogado = False
+        self.responder_429: dict | None = None  # ex.: {"retry_after": 7, "reason": None}
+        self.playlists = [
+            {"uri": "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS", "name": "Lo-fi para estudar",
+             "owner": {"display_name": "Spotify"}, "images": [{"url": "https://i.scdn.co/x"}]},
+            {"uri": "spotify:album:4aawyAB9vmqN3uQ7FjRGTy", "name": "Um álbum (fica de fora)"},
+        ]
+        self._trava = threading.Lock()
+        self._n = 1
+
+    @property
+    def transport(self):
+        import httpx
+
+        return httpx.MockTransport(self._responder)
+
+    def _responder(self, pedido):
+        import json
+        import time
+        from urllib.parse import parse_qs
+
+        import httpx
+
+        if self.responder_429 is not None:
+            corpo = {"error": {"status": 429, "message": "x", "reason": self.responder_429.get("reason")}}
+            return httpx.Response(429, json=corpo,
+                                  headers={"Retry-After": str(self.responder_429.get("retry_after", 5))})
+        if pedido.url.host == "accounts.spotify.com" and pedido.url.path == "/api/token":
+            dados = {k: v[0] for k, v in parse_qs(pedido.content.decode()).items()}
+            if dados["grant_type"] == "authorization_code":
+                if dados.get("code") != "codigo-bom" or dados.get("code_verifier") != self.VERIFIER_ESPERADO:
+                    return httpx.Response(400, json={"error": "invalid_grant"})
+                return httpx.Response(200, json=self._emitir(novo_refresh=True))
+            with self._trava:
+                refresh_enviado = dados.get("refresh_token")
+                valido = not self.revogado and refresh_enviado == self.refresh_valido
+            time.sleep(self.atraso_renovacao)
+            if not valido:
+                return httpx.Response(400, json={"error": "invalid_grant", "error_description": "Refresh token revoked"})
+            with self._trava:
+                if refresh_enviado != self.refresh_valido:  # outro renovou durante o atraso
+                    return httpx.Response(400, json={"error": "invalid_grant"})
+                self.renovacoes += 1
+                return httpx.Response(200, json=self._emitir(novo_refresh=self.rotacionar))
+        if pedido.url.host == "api.spotify.com":
+            if pedido.headers.get("authorization") != f"Bearer {self.access_atual}":
+                return httpx.Response(401, json={"error": {"status": 401, "message": "expired"}})
+            if pedido.url.path == "/v1/me":
+                return httpx.Response(200, json={"id": "spotify-user", "display_name": "Bergola"})
+            if pedido.url.path == "/v1/me/playlists":
+                return httpx.Response(200, content=json.dumps({"items": self.playlists}))
+        return httpx.Response(404)
+
+    def _emitir(self, novo_refresh: bool) -> dict:
+        self._n += 1
+        self.access_atual = f"access-{self._n}"
+        corpo = {"access_token": self.access_atual, "token_type": "Bearer", "expires_in": 3600,
+                 "scope": "user-read-playback-state user-modify-playback-state"}
+        if novo_refresh:
+            self.refresh_valido = f"refresh-{self._n}"
+            corpo["refresh_token"] = self.refresh_valido
+        return corpo

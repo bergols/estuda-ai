@@ -4,7 +4,7 @@
  */
 
 /** Primeiro segmento permitido no repasse /api/<caminho> → API. */
-const PERMITIDOS = new Set(["disciplinas", "revisoes", "analytics", "gastos", "sessoes"]);
+const PERMITIDOS = new Set(["disciplinas", "revisoes", "analytics", "gastos", "sessoes", "spotify"]);
 /** Em /auth, só estes: o login tem rota própria (/api/sessao), que grava o cookie. */
 const AUTH_PERMITIDOS = new Set(["eu", "sair-de-todos"]);
 
