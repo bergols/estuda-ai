@@ -10,7 +10,7 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
 - **Explique as decisões de banco.** Em commits e em `docs/` (`modelagem.md` para o
   schema, `busca-semantica.md` para busca/índices/transações do pipeline,
   `geracao-llm.md` para LLM/RAG/auditoria, `repeticao-espacada.md` para SM-2/fila/
-  concorrência/fuso), diga o
+  concorrência/fuso, `analytics.md` para as consultas analíticas), diga o
   *porquê* (alternativas consideradas, custo/benefício), não só o quê. Didático,
   em português.
 - **Commits pequenos, Conventional Commits em português** (`feat:`, `fix:`, `docs:`,
@@ -23,8 +23,9 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
 
 Fases 1 (fundação + modelagem), 2 (upload de PDF, embeddings, busca semântica/textual/
 híbrida, experimento HNSW), 3 (RAG com a API da Anthropic: perguntar, flashcards,
-questões, tentativas, auditoria de custos) e 4 (SM-2, fila do dia, concorrência, fuso)
-concluídas. Próxima: fase 5 (dashboard com queries analíticas). Roadmap no `README.md`.
+questões, tentativas, auditoria de custos), 4 (SM-2, fila do dia, concorrência, fuso) e 5
+(analytics com SQL avançado, views e materialized view) concluídas. Próxima: fase 6
+(frontend Next.js, autenticação, deploy). Roadmap no `README.md`.
 Pendente da fase 3: o teste real com a API (falta `ANTHROPIC_API_KEY` no `.env`). Exercícios de SQL por fase em `docs/exercicios.md` (sem respostas; o autor
 preenche "Minha resposta:").
 
@@ -42,7 +43,8 @@ docker compose exec backend python -m scripts.experimento_hnsw   # regenera docs
 ```
 
 Seeds: `scripts/seed_experimento.py` (50 mil trechos sintéticos, fase 2) e
-`scripts/seed_revisoes.py` (estudante@estuda-ai.local, 6 semanas de estudo simuladas, fase 4).
+`scripts/seed_revisoes.py` (estudante@estuda-ai.local, 6 semanas de estudo simuladas; com
+`--alunos 200` cria volume para o EXPLAIN, fase 5).
 
 Docker aqui é **Colima** (`colima start` se o socket não responder). Testes também
 rodam no host com `uv run pytest`, sobrescrevendo `DATABASE_URL`/`TEST_DATABASE_URL`
@@ -103,6 +105,22 @@ Armadilhas de ambiente já encontradas:
 - Arquivos ficam no volume `uploads`; o banco guarda o caminho relativo. Disco e banco
   não têm transação comum: no upload, apagar o arquivo se o INSERT falhar; no delete,
   apagar o arquivo só depois do COMMIT.
+
+## Analytics (fase 5)
+
+- Toda consulta analítica é SQL explícito em `app/servicos/analytics.py` (`text()`), comentada
+  com o conceito que ensina; documentada em `docs/analytics.md`.
+- Histórico agregado lê `mv_respostas_diarias` (e a rota devolve `atualizado_em`); o que precisa
+  refletir "agora" (sequência, previsão, ranking, custos) é ao vivo. `POST /analytics/atualizar`
+  faz `REFRESH ... CONCURRENTLY` (exige o índice único da MV).
+- Dia/semana/mês sempre no fuso do usuário (`vw_respostas.dia` já vem local).
+- Séries para gráfico são **densificadas** (`generate_series` + `LEFT JOIN`) antes de janelas e
+  `LAG`. Taxas = razão das somas. Período limitado a 731 dias.
+- Filtros de período sargable: coluna crua + limite numa subconsulta escalar (`_periodo()`).
+- Filtre pelo usuário ANTES de `DISTINCT`/agregações globais; não materialize CTEs com filtro
+  de fora.
+- Testes de analytics montam dados controlados com resultado conhecido
+  (`tests/test_analytics.py`) e chamam `analytics.atualizar_mv()` antes de ler a MV.
 
 ## Repetição espaçada (fase 4)
 

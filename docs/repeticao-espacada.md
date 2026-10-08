@@ -375,9 +375,10 @@ simular "e se" diretamente em SQL.
 
 `scripts/seed_revisoes.py` cria `estudante@estuda-ai.local` e simula 42 dias de estudo no
 fuso de São Paulo: faltas (mais no fim de semana, gerando atraso), cards novos entrando aos
-poucos, até 80 revisões por dia com notas sorteadas pela dificuldade do tópico, pelo atraso
-e pela maturidade do card, e questões respondidas com um distrator "mais tentador". Gera 480
-cards, 2.768 revisões, 60 questões e 148 tentativas.
+poucos, de 30 a 100 revisões por dia com notas sorteadas pela dificuldade do tópico, pelo
+atraso e pela maturidade do card, e questões respondidas com um distrator "mais tentador".
+Gera 480 cards, cerca de 2 mil revisões, 60 questões e 140 tentativas. Na fase 5 ganhou
+apostilas (N:N), gerações de IA simuladas e `--alunos N` para volume; ver `analytics.md`.
 
 Carga em massa, numa transação:
 - `COPY` dos cards (os triggers de linha disparam também em `COPY`, então o estado de cada

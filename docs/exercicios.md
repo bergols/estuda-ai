@@ -331,3 +331,144 @@ RETURNING versao;
 ```sql
 
 ```
+
+---
+
+## Fase 5 — SQL analítico (nível entrevista técnica)
+
+Material de apoio: [`analytics.md`](analytics.md) e
+[`experimentos/analytics.md`](experimentos/analytics.md). Use o seed com vários alunos:
+
+```bash
+docker compose exec backend python -m scripts.seed_revisoes --alunos 200
+```
+
+Estes são problemas clássicos de entrevista, adaptados às tabelas do projeto. Para cada um:
+escreva a consulta, confira o resultado com um caso pequeno que você consegue calcular de
+cabeça e, depois, rode `EXPLAIN ANALYZE` e diga qual é a parte mais cara do plano.
+
+### 5.1 Sessões de estudo (gaps-and-islands em timestamps)
+
+Uma **sessão** é uma sequência de revisões do mesmo aluno em que nenhum intervalo entre duas
+revisões seguidas passa de 30 minutos. Para o estudante:
+
+- (a) liste as sessões com início, fim, duração e número de revisões;
+- (b) calcule a duração média e a mediana das sessões por dia da semana;
+- (c) qual foi a sessão mais longa de cada aluno (dica: top 1 por grupo)?
+
+Dica: `LAG(revisado_em)` marca onde começa uma sessão nova; uma **soma acumulada** dessas
+marcas (`SUM(...) OVER (ORDER BY ...)`) numera as sessões. Por que a técnica do
+`dia - row_number()` da Fase 5 não serve aqui?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 5.2 Coorte de retenção
+
+Agrupe os cards pela **semana em que foram criados** (a coorte). Para cada coorte, mostre a
+taxa de acerto na 1ª, na 2ª e na 3ª revisão de cada card, em colunas lado a lado (uma linha
+por coorte).
+
+Dicas: `ROW_NUMBER() OVER (PARTITION BY flashcard_id ORDER BY revisado_em)` dá o número da
+revisão; "pivotar" linhas em colunas sem `crosstab` se faz com agregação condicional
+(`avg(...) FILTER (WHERE n = 1)`). As coortes mais recentes devem ter buracos na 3ª revisão:
+mostre isso como `NULL`, não como 0. Por quê?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 5.3 Mediana, percentil e a armadilha da janela
+
+Usando `tentativas.tempo_ms`:
+
+- (a) o tempo mediano de resposta por questão e por disciplina (`percentile_cont(0.5)`);
+- (b) as questões cujo tempo mediano passa do **percentil 90** dos tempos medianos da sua
+  disciplina;
+- (c) divida os 200 alunos em quartis pela taxa de acerto geral (`NTILE(4)`) e mostre, por
+  quartil, a taxa média e o número de dias estudados.
+
+A armadilha de (b): `percentile_cont` **não** é uma função de janela
+(`percentile_cont(...) OVER (...)` dá erro). Como contornar? E qual a diferença entre
+`percentile_cont` e `percentile_disc`?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 5.4 Recordes de sequência
+
+Para cada aluno, liste os dias em que ele **bateu o próprio recorde** de sequência de estudo
+(o tamanho da sequência atual naquele dia passou a ser o maior até então).
+
+Dicas: primeiro as ilhas (gaps-and-islands); depois, para cada dia de uma ilha, o tamanho
+parcial da sequência até ele (`row_number()` dentro da ilha); por fim, um
+`MAX(...) OVER (ORDER BY dia ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)` para comparar
+com o recorde **anterior**. Por que o quadro termina em `1 PRECEDING` e não em `CURRENT ROW`?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 5.5 Divisão relacional
+
+- (a) os alunos que estudaram em **todos** os 7 dias de uma semana escolhida;
+- (b) os alunos que revisaram pelo menos um card de **todas** as suas disciplinas nos últimos
+  7 dias.
+
+Resolva (b) de dois jeitos: com `GROUP BY ... HAVING count(DISTINCT ...) = (subconsulta)` e com
+`NOT EXISTS (... NOT EXISTS ...)` ("não existe disciplina do aluno sem revisão"). Compare os
+planos. O que acontece com um aluno que **não tem** nenhuma disciplina, em cada versão?
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 5.6 Queda de ritmo
+
+Para cada aluno e dia, compare o número de revisões com a **média dos 7 dias anteriores**
+(sem incluir o próprio dia) e liste os dias com queda de mais de 50%.
+
+- (a) escreva o quadro da janela que exclui o dia atual;
+- (b) os dias sem estudo precisam entrar na média como 0. Faça isso de dois jeitos:
+  densificando com `generate_series` (quadro `ROWS`) e sem densificar (quadro `RANGE` com
+  `interval`). Os dois dão o mesmo resultado? Em que caso não dariam?
+- (c) essa consulta deveria ler `mv_respostas_diarias` ou `vw_respostas`? Justifique com
+  `EXPLAIN ANALYZE` para os 200 alunos.
+
+**Minha resposta:**
+
+```sql
+
+```
+
+### 5.7 Duplicatas e um DELETE seguro
+
+Simule um bug de duplo envio (dentro de `BEGIN; ... ROLLBACK;`): copie 50 tentativas do
+estudante com `respondida_em` 2 segundos depois da original. Depois:
+
+- (a) encontre os pares duplicados: mesma questão, mesma alternativa, menos de 5 s de
+  diferença;
+- (b) apague as duplicatas mantendo a **primeira** de cada grupo, de dois jeitos: com
+  `ROW_NUMBER()` numa CTE (`DELETE ... WHERE id IN (SELECT ...)`) e com
+  `DELETE ... USING` (autojunção);
+- (c) por que `DELETE` de linhas duplicadas sem chave primária seria muito mais difícil, e
+  como o Postgres permitiria fazê-lo mesmo assim (dica: `ctid`)? Por que não confiar em
+  `ctid` numa aplicação?
+
+**Minha resposta:**
+
+```sql
+
+```

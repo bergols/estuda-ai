@@ -8,7 +8,8 @@ A busca (embeddings, HNSW, full-text, busca híbrida) tem documento próprio:
 [`busca-semantica.md`](busca-semantica.md). A geração com LLM (RAG, alternativas em tabela
 contra JSONB, constraint adiada, deduplicação, auditoria) está em
 [`geracao-llm.md`](geracao-llm.md). A repetição espaçada (SM-2, estado × histórico, fila do
-dia, concorrência, fuso horário) está em [`repeticao-espacada.md`](repeticao-espacada.md).
+dia, concorrência, fuso horário) está em [`repeticao-espacada.md`](repeticao-espacada.md). As
+views e as consultas analíticas, em [`analytics.md`](analytics.md).
 
 Histórico de migrations:
 
@@ -26,6 +27,8 @@ Histórico de migrations:
 | `estado_sm2_em_revisoes` | 4 | `revisoes` → `historico_revisoes` (antes/depois, imutável); nova `revisoes` = estado 1:1; SM-2 sai de `flashcards` |
 | `fuso_horario_do_usuario` | 4 | `usuarios.fuso_horario`, validado por trigger |
 | `funcao_sm2_plpgsql` | 4 | função `sm2()` em PL/pgSQL (experimento) |
+| `views_de_analytics` | 5 | `VIEW vw_respostas`, `MATERIALIZED VIEW mv_respostas_diarias` (+ índice único), tabela `atualizacoes_mv` |
+| `historico_revisoes_indice_include_nota` | 5 | índice do histórico com `INCLUDE (nota)`, trocado com `CREATE INDEX CONCURRENTLY` |
 
 > Dica de estudo: abra o `psql` e confira cada afirmação daqui.
 > `docker compose exec db psql -U estuda_ai -d estuda_ai` e depois `\d+ flashcards`.
@@ -554,7 +557,8 @@ concreta em mente.
 | `ix_flashcards_geracao_id` | B-tree, **parcial** | cards de uma geração + FK |
 | `pk_flashcard_trechos` | B-tree, único, composto | trechos de um card + FK `flashcard_id` |
 | `ix_flashcard_trechos_trecho_id` | B-tree | cards de um trecho + FK `trecho_id` |
-| `ix_historico_revisoes_flashcard_revisado_em` | B-tree, composto | histórico de um card + FK |
+| `ix_historico_revisoes_flashcard_revisado_em` | B-tree, composto, `INCLUDE (nota)` | histórico de um card + FK; Index Only Scan no analytics |
+| `uq_mv_respostas_diarias` | B-tree, único (na materialized view) | exigido pelo `REFRESH ... CONCURRENTLY`; leituras por usuário |
 | `ix_questoes_disciplina_id` | B-tree | questões de uma disciplina + FK |
 | `ix_questoes_geracao_id` | B-tree, **parcial** | questões de uma geração + FK |
 | `pk_questao_trechos` / `ix_questao_trechos_trecho_id` | B-tree | idem, para questões |
@@ -615,6 +619,25 @@ ANN (*approximate nearest neighbor*): troca um pouco de precisão (*recall*) por
 Índice **invertido**: para cada lexema, a lista de linhas que o contêm (como o índice
 remissivo de um livro). Atende `tsvector @@ tsquery`. Detalhes em `busca-semantica.md`,
 seção 6.
+
+---
+
+### `INCLUDE` (fase 5)
+
+`CREATE INDEX ... (flashcard_id, revisado_em) INCLUDE (nota)`: `nota` fica nas folhas do índice
+sem ser chave. Consultas que só precisam dessas três colunas são respondidas só pelo índice
+(**Index Only Scan**), se o mapa de visibilidade estiver em dia (`VACUUM`). Medido e explicado em
+`analytics.md`, seção 9.
+
+### Views (fase 5)
+
+- `vw_respostas` (**VIEW**): revisões e tentativas num formato só, com o dia no fuso do usuário.
+  Não guarda dados.
+- `mv_respostas_diarias` (**MATERIALIZED VIEW**): respostas e acertos por
+  usuário/disciplina/dia/fonte, gravados em disco; atualizada por `REFRESH ... CONCURRENTLY`. O
+  horário do último refresh fica em `atualizacoes_mv`.
+
+Views não aparecem em `app/models.py` (o ORM não as gerencia); são lidas com SQL explícito.
 
 ---
 

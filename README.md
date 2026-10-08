@@ -9,7 +9,8 @@ desempenho por disciplina e tópico.
 (PostgreSQL, modelagem, índices, transações e busca vetorial). Por isso as decisões de
 banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/modelagem.md),
 [busca semântica](docs/busca-semantica.md), [geração com LLM](docs/geracao-llm.md),
-[repetição espaçada](docs/repeticao-espacada.md) e [exercícios de SQL](docs/exercicios.md).
+[repetição espaçada](docs/repeticao-espacada.md), [analytics](docs/analytics.md) e
+[exercícios de SQL](docs/exercicios.md).
 
 ## Stack
 
@@ -193,6 +194,36 @@ docker compose exec backend python -m scripts.seed_revisoes
 docker compose exec backend python -m scripts.experimento_fila
 ```
 
+### Analytics de desempenho
+
+Dados prontos para plotar (os gráficos são da Fase 6), todos com `disciplina_id` e, quando há
+período, `de`/`ate` (datas no fuso do usuário):
+
+```bash
+curl 'localhost:8000/analytics/evolucao/semanal' -H 'X-Usuario-Id: 1'
+```
+
+| Rota | Conteúdo |
+|---|---|
+| `/analytics/acerto-semanal?por=disciplina\|material` | taxa de acerto por semana |
+| `/analytics/evolucao/diaria` e `/analytics/evolucao/semanal` | média móvel de 7 dias e comparação com a semana anterior |
+| `/analytics/cards-dificeis` | top N por disciplina (com empates) |
+| `/analytics/sequencia` | dias seguidos de estudo: atual e maior |
+| `/analytics/previsao` | cards vencendo nos próximos 30 dias |
+| `/analytics/calendario` | revisões por dia no último ano (estilo GitHub) |
+| `/analytics/custos` | gasto com IA por mês e tipo, acumulado |
+| `POST /analytics/atualizar` | refresh da materialized view |
+
+Para volume (200 alunos simulados) e o experimento de performance:
+
+```bash
+docker compose exec backend python -m scripts.seed_revisoes --alunos 200
+```
+
+```bash
+docker compose exec backend python -m scripts.experimento_analytics
+```
+
 ## Estrutura
 
 ```
@@ -205,15 +236,16 @@ estuda-ai/
 │   │   ├── schemas.py       # contratos Pydantic da API
 │   │   ├── deps.py          # dependências (sessão, usuário atual, embedder)
 │   │   ├── routers/         # rotas por recurso
-│   │   └── servicos/        # pdf, chunking, embeddings, busca, llm, rag, gerar, sm2, revisao
+│   │   └── servicos/        # pdf, chunking, embeddings, busca, llm, rag, gerar, sm2, revisao, analytics
 │   ├── alembic/versions/    # migrations: a fonte da verdade do schema
-│   ├── scripts/             # seeds e experimentos (HNSW, fila do dia)
+│   ├── scripts/             # seeds e experimentos (HNSW, fila do dia, analytics)
 │   └── tests/
 ├── docs/
 │   ├── modelagem.md         # diagrama ER e decisões de banco
 │   ├── busca-semantica.md   # embeddings, pgvector, HNSW, full-text, híbrida
 │   ├── geracao-llm.md       # RAG, saída estruturada, N:N, alternativas, auditoria
 │   ├── repeticao-espacada.md # SM-2, estado x histórico, fila, concorrência, fuso
+│   ├── analytics.md         # views, window functions, gaps-and-islands, EXPLAIN
 │   ├── exercicios.md        # exercícios de SQL por fase
 │   └── experimentos/        # resultados gerados por script
 └── frontend/                # fase 6
@@ -236,8 +268,9 @@ estuda-ai/
   PL/pgSQL), estado 1:1 em `revisoes` + histórico imutável, fila do dia no fuso do usuário
   com índice provado por `EXPLAIN ANALYZE`, controle otimista de concorrência e seed com 6
   semanas de estudo simuladas.
-- [ ] **Fase 5: dashboard.** Queries analíticas com `GROUP BY`, window functions e
-  views. Normalização de tópicos numa tabela própria.
+- [x] **Fase 5: analytics.** Endpoints com SQL analítico explícito (GROUPING SETS, window
+  functions, LAG, DENSE_RANK, gaps-and-islands, generate_series, percentile_cont), VIEW e
+  MATERIALIZED VIEW com REFRESH CONCURRENTLY, e otimização provada com EXPLAIN ANALYZE.
 - [ ] **Fase 6: frontend e otimização.** Next.js, autenticação, fila de processamento
   robusta (`FOR UPDATE SKIP LOCKED`), limpeza de arquivos órfãos, ajuste de
   `ef_search`/`m` com dados reais e deploy.
