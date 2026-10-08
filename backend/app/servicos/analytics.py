@@ -30,18 +30,24 @@ def _filtro(coluna: str, valor) -> str:
 
 
 def _periodo(coluna: str, de: date | None, ate: date | None) -> str:
-    """Filtro de período por DATAS LOCAIS sobre uma coluna timestamptz.
+    """Filtro de período por DATAS LOCAIS sobre uma coluna timestamptz, "sargable".
 
-    Converte os LIMITES para instantes (meia-noite local de :de e de :ate + 1) e
-    compara a coluna "crua". Escrever (coluna AT TIME ZONE fuso)::date >= :de dá o
-    mesmo resultado, mas aplica uma função na COLUNA, e aí nenhum índice sobre ela
-    pode ser usado (a condição deixa de ser "sargable"). Exige "u" = usuarios no FROM.
+    Duas regras para um índice sobre a coluna poder ser usado (Index Cond):
+    1. a COLUNA fica crua: escrever (coluna AT TIME ZONE fuso)::date >= :de dá o
+       mesmo resultado, mas aplica uma função na coluna e nenhum índice sobre ela
+       serve;
+    2. o LIMITE precisa ser conhecido ANTES da varredura. Por isso o limite é uma
+       subconsulta escalar (vira um InitPlan, calculado uma vez) e não
+       "... AT TIME ZONE u.fuso_horario" com u vindo do JOIN, que só existe linha a
+       linha e transformaria a condição num Join Filter (medido em
+       docs/experimentos/analytics.md).
     """
+    fuso = "(SELECT fuso_horario FROM usuarios WHERE id = :usuario_id)"
     trecho = ""
     if de is not None:
-        trecho += f" AND {coluna} >= (CAST(:de AS timestamp) AT TIME ZONE u.fuso_horario)"
+        trecho += f" AND {coluna} >= (CAST(:de AS timestamp) AT TIME ZONE {fuso})"
     if ate is not None:
-        trecho += f" AND {coluna} < (CAST(:ate AS timestamp) + interval '1 day') AT TIME ZONE u.fuso_horario"
+        trecho += f" AND {coluna} < ((CAST(:ate AS timestamp) + interval '1 day') AT TIME ZONE {fuso})"
     return trecho
 
 
@@ -118,13 +124,22 @@ SQL_ACERTO_SEMANAL_DISCIPLINA = """
 # no JOIN e contaria a resposta em dobro. O SELECT DISTINCT (item, material) deixa
 # um par por material. Um card ligado a 2 materiais DIFERENTES conta nos dois (é
 # uma resposta sobre os dois), então a soma por material passa do total de respostas.
+#
+# Performance: o DISTINCT é feito só sobre os itens das disciplinas DESTE aluno
+# (trechos.disciplina_id). A 1a versão fazia DISTINCT sobre as associações de
+# TODOS os alunos e só depois filtrava: ~25x mais lenta (experimentos/analytics.md).
 SQL_ACERTO_SEMANAL_MATERIAL = """
-    WITH item_material AS (
+    WITH disciplinas_do_aluno AS (
+        SELECT id FROM disciplinas WHERE usuario_id = :usuario_id {filtro_d}
+    ),
+    item_material AS (
         SELECT DISTINCT 'revisao' AS fonte, ft.flashcard_id AS item_id, t.material_id
         FROM flashcard_trechos AS ft JOIN trechos AS t ON t.id = ft.trecho_id
+        WHERE t.disciplina_id IN (SELECT id FROM disciplinas_do_aluno)
         UNION ALL
         SELECT DISTINCT 'questao', qt.questao_id, t.material_id
         FROM questao_trechos AS qt JOIN trechos AS t ON t.id = qt.trecho_id
+        WHERE t.disciplina_id IN (SELECT id FROM disciplinas_do_aluno)
     )
     SELECT date_trunc('week', r.dia)::date AS semana,
            r.disciplina_id,
@@ -147,7 +162,9 @@ SQL_ACERTO_SEMANAL_MATERIAL = """
 def acerto_semanal(session, *, usuario_id, disciplina_id, de, ate, por: str):
     params = {"usuario_id": usuario_id, "de": de, "ate": ate, "disciplina_id": disciplina_id}
     if por == "material":
-        sql = SQL_ACERTO_SEMANAL_MATERIAL.format(filtro=_filtro("r.disciplina_id", disciplina_id))
+        sql = SQL_ACERTO_SEMANAL_MATERIAL.format(
+            filtro=_filtro("r.disciplina_id", disciplina_id), filtro_d=_filtro("id", disciplina_id)
+        )
     else:
         sql = SQL_ACERTO_SEMANAL_DISCIPLINA.format(
             filtro=_filtro("m.disciplina_id", disciplina_id),

@@ -459,7 +459,14 @@ class HistoricoRevisao(Base):
             "repeticoes_anterior >= 0 AND repeticoes_nova >= 0", name="repeticoes_nao_negativas"
         ),
         CheckConstraint("proxima_revisao_nova >= revisado_em", name="proxima_apos_revisao"),
-        Index("ix_historico_revisoes_flashcard_revisado_em", flashcard_id, revisado_em),
+        # INCLUDE (nota): Index Only Scan no ramo de revisões de vw_respostas e no
+        # ranking de cards difíceis (fase 5; medido em experimentos/analytics.md).
+        Index(
+            "ix_historico_revisoes_flashcard_revisado_em",
+            flashcard_id,
+            revisado_em,
+            postgresql_include=["nota"],
+        ),
     )
 
 
