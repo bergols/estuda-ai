@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.deps import DisciplinaDoUsuario, EmbedderDep, LLMDep, SessionDep
+from app.deps import DisciplinaDoUsuario, EmbedderDep, LLMDep, ProtecaoIA, SessionDep
 from app.models import Flashcard
 from app.routers.perguntar import erro_http
 from app.schemas import FlashcardLer, FlashcardsGeradosSaida, GeracaoResumo, GerarEntrada
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/disciplinas/{disciplina_id}/flashcards", tags=["flas
 def gerar_flashcards(
     dados: GerarEntrada,
     disciplina: DisciplinaDoUsuario,
+    _: ProtecaoIA,  # depois da disciplina: dado alheio continua 404
     session: SessionDep,
     embedder: EmbedderDep,
     llm: LLMDep,

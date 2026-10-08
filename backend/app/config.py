@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     # Login dura 30 dias (praticidade no celular); "sair de todos" revoga na hora.
     jwt_dias: int = Field(default=30, ge=1, le=365)
 
+    # Proteção de custo e de força bruta (fase 6).
+    # Quantas gerações de IA por dia (no fuso do usuário), contadas na auditoria
+    # (tabela geracoes), inclusive as que falharam: também custam. 0 = IA desligada.
+    limite_geracoes_dia: int = Field(default=50, ge=0)
+    # Rate limiting (janelas fixas, contadas no Postgres com UPSERT).
+    limite_ia_por_minuto: int = Field(default=10, ge=1)
+    limite_login_por_ip: int = Field(default=20, ge=1)  # a cada 15 minutos
+    limite_login_por_email: int = Field(default=5, ge=1)  # a cada 15 minutos
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -606,3 +606,20 @@ class AtualizacaoMV(Base):
     duracao_ms: Mapped[int] = mapped_column(Integer, nullable=False)
 
     __table_args__ = (CheckConstraint("duracao_ms >= 0", name="duracao_nao_negativa"),)
+
+
+class LimiteTaxa(Base):
+    """Contador de rate limiting por (chave, janela). Tabela UNLOGGED: sem WAL,
+    esvaziada numa queda do servidor (contadores de minutos são descartáveis)."""
+
+    __tablename__ = "limites_taxa"
+
+    chave: Mapped[str] = mapped_column(Text, primary_key=True)
+    janela_inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    contagem: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("contagem > 0", name="contagem_positiva"),
+        Index("ix_limites_taxa_janela_inicio", "janela_inicio"),
+        {"prefixes": ["UNLOGGED"]},
+    )

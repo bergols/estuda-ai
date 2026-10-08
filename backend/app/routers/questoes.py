@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.orm import selectinload
 
-from app.deps import DisciplinaDoUsuario, EmbedderDep, LLMDep, SessionDep
+from app.deps import DisciplinaDoUsuario, EmbedderDep, LLMDep, ProtecaoIA, SessionDep
 from app.models import Questao
 from app.routers.perguntar import erro_http
 from app.schemas import (
@@ -27,6 +27,7 @@ def _com_relacionamentos():
 def gerar_questoes(
     dados: GerarEntrada,
     disciplina: DisciplinaDoUsuario,
+    _: ProtecaoIA,  # depois da disciplina: dado alheio continua 404
     session: SessionDep,
     embedder: EmbedderDep,
     llm: LLMDep,

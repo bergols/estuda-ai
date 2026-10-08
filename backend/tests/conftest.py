@@ -120,8 +120,15 @@ def anthropic_falso():
 
 
 @pytest.fixture
-def client(session, embedder, pasta_uploads, fabrica, anthropic_falso):
-    settings = get_settings().model_copy(update={"upload_dir": pasta_uploads, "max_upload_mb": 1})
+def settings_teste(pasta_uploads):
+    """Configurações usadas pela API nos testes; um teste pode mudar um campo
+    (ex.: settings_teste.limite_geracoes_dia = 2) antes de chamar a rota."""
+    return get_settings().model_copy(update={"upload_dir": pasta_uploads, "max_upload_mb": 1})
+
+
+@pytest.fixture
+def client(session, embedder, fabrica, anthropic_falso, settings_teste):
+    settings = settings_teste
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_embedder] = lambda: embedder

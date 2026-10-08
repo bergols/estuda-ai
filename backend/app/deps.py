@@ -1,3 +1,4 @@
+from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
 
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.db import SessionLocal, get_session
 from app.models import Disciplina, Usuario
-from app.servicos import auth
+from app.servicos import auth, limites
 from app.servicos.embeddings import Embedder, get_embedder
 from app.servicos.llm import ClienteLLM
 from app.servicos.processamento import FabricaSessao
@@ -86,3 +87,28 @@ def disciplina_do_usuario(
 
 
 DisciplinaDoUsuario = Annotated[Disciplina, Depends(disciplina_do_usuario)]
+
+
+def http_429(erro: limites.Excedido) -> HTTPException:
+    # Retry-After diz ao cliente quantos segundos esperar (padrão HTTP).
+    return HTTPException(
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        erro.mensagem,
+        headers={"Retry-After": str(erro.tentar_de_novo_em_s)},
+    )
+
+
+def protecao_ia(usuario: UsuarioAtual, session: SessionDep, settings: SettingsDep) -> None:
+    """Antes de qualquer chamada ao LLM: rate limit por usuário (rajadas) e cota
+    diária (teto de custo). Se alguém achar o link e tiver um token, o estrago
+    máximo por dia fica limitado a LIMITE_GERACOES_DIA gerações."""
+    try:
+        limites.consumir(
+            session, f"ia:usuario:{usuario.id}", settings.limite_ia_por_minuto, timedelta(minutes=1)
+        )
+        limites.verificar_cota_diaria(session, usuario.id, settings.limite_geracoes_dia)
+    except limites.Excedido as erro:
+        raise http_429(erro) from erro
+
+
+ProtecaoIA = Annotated[None, Depends(protecao_ia)]

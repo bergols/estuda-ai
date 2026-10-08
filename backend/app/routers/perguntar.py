@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.deps import DisciplinaDoUsuario, EmbedderDep, LLMDep, SessionDep
+from app.deps import DisciplinaDoUsuario, EmbedderDep, LLMDep, ProtecaoIA, SessionDep
 from app.schemas import Citacao, GeracaoResumo, PerguntaEntrada, RespostaPergunta
 from app.servicos import rag
 from app.servicos.llm import ErroGeracao
@@ -25,6 +25,7 @@ def erro_http(erro: ErroGeracao) -> HTTPException:
 def perguntar(
     dados: PerguntaEntrada,
     disciplina: DisciplinaDoUsuario,
+    _: ProtecaoIA,  # depois da disciplina: dado alheio continua 404
     session: SessionDep,
     embedder: EmbedderDep,
     llm: LLMDep,
