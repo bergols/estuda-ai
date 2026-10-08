@@ -10,7 +10,7 @@ use percent_encoding::percent_decode_str;
 use url::Url;
 
 /// Primeiro segmento permitido (igual a PERMITIDOS em frontend/src/lib/bff.ts).
-const PERMITIDOS: &[&str] = &["disciplinas", "revisoes", "analytics", "gastos"];
+const PERMITIDOS: &[&str] = &["disciplinas", "revisoes", "analytics", "gastos", "sessoes"];
 /// Em /auth, só estes: o login tem comando próprio (entrar), que guarda o token no cofre.
 const AUTH_PERMITIDOS: &[&str] = &["eu", "sair-de-todos"];
 
@@ -154,6 +154,7 @@ mod testes {
             "revisoes/hoje",
             "analytics/resumo",
             "gastos",
+            "sessoes/sincronizar",
             "auth/eu",
             "auth/sair-de-todos",
         ] {

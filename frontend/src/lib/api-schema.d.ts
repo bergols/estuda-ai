@@ -579,6 +579,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sessoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar
+         * @description Sessões mais recentes, com foco efetivo, pausas e interrupções.
+         */
+        get: operations["listar_sessoes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sessoes/sincronizar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sincronizar
+         * @description Recebe um lote de sessões de estudo do app desktop (com pausas e eventos).
+         *
+         *     Idempotente: reenviar o mesmo lote não duplica nada. Cada sessão volta com o seu
+         *     resultado (criada, atualizada, sem_mudanca ou recusada); uma sessão recusada não
+         *     impede as outras de serem gravadas.
+         */
+        post: operations["sincronizar_sessoes_sincronizar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -810,6 +854,28 @@ export interface components {
             /** Repeticoes */
             repeticoes: number;
         };
+        /** EventoFocoEnvio */
+        EventoFocoEnvio: {
+            /**
+             * Chave
+             * Format: uuid
+             */
+            chave: string;
+            /** Detalhe */
+            detalhe?: string | null;
+            /** Duracao S */
+            duracao_s?: number | null;
+            /**
+             * Ocorrido Em
+             * Format: date-time
+             */
+            ocorrido_em: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "saida_janela" | "programa_bloqueado" | "site_bloqueado" | "saida_emergencia";
+        };
         /** EvolucaoDia */
         EvolucaoDia: {
             /** Acertos */
@@ -965,6 +1031,11 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** LoteSessoes */
+        LoteSessoes: {
+            /** Sessoes */
+            sessoes: components["schemas"]["SessaoEnvio"][];
+        };
         /** MaterialLer */
         MaterialLer: {
             /**
@@ -998,6 +1069,29 @@ export interface components {
             tipo: "pdf" | "anotacao" | "texto";
             /** Titulo */
             titulo: string;
+        };
+        /** PausaEnvio */
+        PausaEnvio: {
+            /**
+             * Chave
+             * Format: uuid
+             */
+            chave: string;
+            /**
+             * Iniciada Em
+             * Format: date-time
+             */
+            iniciada_em: string;
+            /**
+             * Terminada Em
+             * Format: date-time
+             */
+            terminada_em: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "curta" | "longa" | "manual";
         };
         /** PerguntaEntrada */
         PerguntaEntrada: {
@@ -1097,6 +1191,43 @@ export interface components {
             proxima_revisao: string;
             /** Versao */
             versao: number;
+        };
+        /** ResultadoSessao */
+        ResultadoSessao: {
+            /**
+             * Chave
+             * Format: uuid
+             */
+            chave: string;
+            /**
+             * Disciplina Descartada
+             * @default false
+             */
+            disciplina_descartada?: boolean;
+            /** Erro */
+            erro?: string | null;
+            /**
+             * Eventos Novos
+             * @default 0
+             */
+            eventos_novos?: number;
+            /** Id */
+            id?: number | null;
+            /**
+             * Pausas Novas
+             * @default 0
+             */
+            pausas_novas?: number;
+            /**
+             * Resultado
+             * @enum {string}
+             */
+            resultado: "criada" | "atualizada" | "sem_mudanca" | "recusada";
+        };
+        /** ResultadoSincronizacao */
+        ResultadoSincronizacao: {
+            /** Sessoes */
+            sessoes: components["schemas"]["ResultadoSessao"][];
         };
         /** RevisaoEntrada */
         RevisaoEntrada: {
@@ -1208,6 +1339,117 @@ export interface components {
             dados: components["schemas"]["PrevisaoDia"][];
             /** De */
             de?: string | null;
+        };
+        /** SessaoEnvio */
+        SessaoEnvio: {
+            /**
+             * Chave
+             * Format: uuid
+             */
+            chave: string;
+            /** Ciclos */
+            ciclos: number;
+            /** Ciclos Ate Pausa Longa */
+            ciclos_ate_pausa_longa?: number | null;
+            /** Disciplina Id */
+            disciplina_id?: number | null;
+            /**
+             * Eventos
+             * @default []
+             */
+            eventos?: components["schemas"]["EventoFocoEnvio"][];
+            /** Foco Min */
+            foco_min: number;
+            /**
+             * Iniciada Em
+             * Format: date-time
+             */
+            iniciada_em: string;
+            /** Meta */
+            meta?: string | null;
+            /**
+             * Metodo
+             * @enum {string}
+             */
+            metodo: "pomodoro" | "bloco" | "52_17" | "personalizado";
+            /** Pausa Longa Min */
+            pausa_longa_min?: number | null;
+            /** Pausa Min */
+            pausa_min: number;
+            /**
+             * Pausas
+             * @default []
+             */
+            pausas?: components["schemas"]["PausaEnvio"][];
+            /**
+             * Sistema
+             * @enum {string}
+             */
+            sistema: "windows" | "macos" | "linux" | "web";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "em_andamento" | "concluida" | "abandonada";
+            /** Terminada Em */
+            terminada_em?: string | null;
+        };
+        /** SessaoLer */
+        SessaoLer: {
+            /**
+             * Chave
+             * Format: uuid
+             */
+            chave: string;
+            /**
+             * Dia
+             * Format: date
+             */
+            dia: string;
+            /** Disciplina */
+            disciplina: string | null;
+            /** Disciplina Id */
+            disciplina_id: number | null;
+            /** Duracao Planejada S */
+            duracao_planejada_s: number;
+            /** Duracao Real S */
+            duracao_real_s: number | null;
+            /** Emergencias */
+            emergencias: number;
+            /** Foco Efetivo S */
+            foco_efetivo_s: number | null;
+            /** Fora S */
+            fora_s: number;
+            /** Id */
+            id: number;
+            /**
+             * Iniciada Em
+             * Format: date-time
+             */
+            iniciada_em: string;
+            /** Interrupcoes */
+            interrupcoes: number;
+            /** Meta */
+            meta: string | null;
+            /**
+             * Metodo
+             * @enum {string}
+             */
+            metodo: "pomodoro" | "bloco" | "52_17" | "personalizado";
+            /** Pausas S */
+            pausas_s: number;
+            /**
+             * Sistema
+             * @enum {string}
+             */
+            sistema: "windows" | "macos" | "linux" | "web";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "em_andamento" | "concluida" | "abandonada";
+            /** Terminada Em */
+            terminada_em: string | null;
         };
         /** TentativaEntrada */
         TentativaEntrada: {
@@ -2323,6 +2565,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResultadoRevisaoSaida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_sessoes_get: {
+        parameters: {
+            query?: {
+                limite?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessaoLer"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sincronizar_sessoes_sincronizar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoteSessoes"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultadoSincronizacao"];
                 };
             };
             /** @description Validation Error */

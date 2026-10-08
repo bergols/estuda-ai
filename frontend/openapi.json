@@ -594,6 +594,63 @@
         "title": "EstadoSM2Saida",
         "type": "object"
       },
+      "EventoFocoEnvio": {
+        "properties": {
+          "chave": {
+            "format": "uuid",
+            "title": "Chave",
+            "type": "string"
+          },
+          "detalhe": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalhe"
+          },
+          "duracao_s": {
+            "anyOf": [
+              {
+                "maximum": 86400.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duracao S"
+          },
+          "ocorrido_em": {
+            "format": "date-time",
+            "title": "Ocorrido Em",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "saida_janela",
+              "programa_bloqueado",
+              "site_bloqueado",
+              "saida_emergencia"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chave",
+          "tipo",
+          "ocorrido_em"
+        ],
+        "title": "EventoFocoEnvio",
+        "type": "object"
+      },
       "EvolucaoDia": {
         "properties": {
           "acertos": {
@@ -1045,6 +1102,24 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "LoteSessoes": {
+        "properties": {
+          "sessoes": {
+            "items": {
+              "$ref": "#/components/schemas/SessaoEnvio"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Sessoes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessoes"
+        ],
+        "title": "LoteSessoes",
+        "type": "object"
+      },
       "MaterialLer": {
         "properties": {
           "criado_em": {
@@ -1147,6 +1222,42 @@
           "processado_em"
         ],
         "title": "MaterialLer",
+        "type": "object"
+      },
+      "PausaEnvio": {
+        "properties": {
+          "chave": {
+            "format": "uuid",
+            "title": "Chave",
+            "type": "string"
+          },
+          "iniciada_em": {
+            "format": "date-time",
+            "title": "Iniciada Em",
+            "type": "string"
+          },
+          "terminada_em": {
+            "format": "date-time",
+            "title": "Terminada Em",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "curta",
+              "longa",
+              "manual"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chave",
+          "tipo",
+          "iniciada_em",
+          "terminada_em"
+        ],
+        "title": "PausaEnvio",
         "type": "object"
       },
       "PerguntaEntrada": {
@@ -1447,6 +1558,84 @@
           "historico_id"
         ],
         "title": "ResultadoRevisaoSaida",
+        "type": "object"
+      },
+      "ResultadoSessao": {
+        "properties": {
+          "chave": {
+            "format": "uuid",
+            "title": "Chave",
+            "type": "string"
+          },
+          "disciplina_descartada": {
+            "default": false,
+            "title": "Disciplina Descartada",
+            "type": "boolean"
+          },
+          "erro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Erro"
+          },
+          "eventos_novos": {
+            "default": 0,
+            "title": "Eventos Novos",
+            "type": "integer"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "pausas_novas": {
+            "default": 0,
+            "title": "Pausas Novas",
+            "type": "integer"
+          },
+          "resultado": {
+            "enum": [
+              "criada",
+              "atualizada",
+              "sem_mudanca",
+              "recusada"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chave",
+          "resultado"
+        ],
+        "title": "ResultadoSessao",
+        "type": "object"
+      },
+      "ResultadoSincronizacao": {
+        "properties": {
+          "sessoes": {
+            "items": {
+              "$ref": "#/components/schemas/ResultadoSessao"
+            },
+            "title": "Sessoes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessoes"
+        ],
+        "title": "ResultadoSincronizacao",
         "type": "object"
       },
       "RevisaoEntrada": {
@@ -1919,6 +2108,320 @@
           "dados"
         ],
         "title": "Serie[PrevisaoDia]",
+        "type": "object"
+      },
+      "SessaoEnvio": {
+        "properties": {
+          "chave": {
+            "format": "uuid",
+            "title": "Chave",
+            "type": "string"
+          },
+          "ciclos": {
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Ciclos",
+            "type": "integer"
+          },
+          "ciclos_ate_pausa_longa": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ciclos Ate Pausa Longa"
+          },
+          "disciplina_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disciplina Id"
+          },
+          "eventos": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EventoFocoEnvio"
+            },
+            "maxItems": 1000,
+            "title": "Eventos",
+            "type": "array"
+          },
+          "foco_min": {
+            "maximum": 240.0,
+            "minimum": 1.0,
+            "title": "Foco Min",
+            "type": "integer"
+          },
+          "iniciada_em": {
+            "format": "date-time",
+            "title": "Iniciada Em",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          },
+          "metodo": {
+            "enum": [
+              "pomodoro",
+              "bloco",
+              "52_17",
+              "personalizado"
+            ],
+            "title": "Metodo",
+            "type": "string"
+          },
+          "pausa_longa_min": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pausa Longa Min"
+          },
+          "pausa_min": {
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Pausa Min",
+            "type": "integer"
+          },
+          "pausas": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PausaEnvio"
+            },
+            "maxItems": 200,
+            "title": "Pausas",
+            "type": "array"
+          },
+          "sistema": {
+            "enum": [
+              "windows",
+              "macos",
+              "linux",
+              "web"
+            ],
+            "title": "Sistema",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "em_andamento",
+              "concluida",
+              "abandonada"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "terminada_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminada Em"
+          }
+        },
+        "required": [
+          "chave",
+          "metodo",
+          "foco_min",
+          "pausa_min",
+          "ciclos",
+          "sistema",
+          "status",
+          "iniciada_em"
+        ],
+        "title": "SessaoEnvio",
+        "type": "object"
+      },
+      "SessaoLer": {
+        "properties": {
+          "chave": {
+            "format": "uuid",
+            "title": "Chave",
+            "type": "string"
+          },
+          "dia": {
+            "format": "date",
+            "title": "Dia",
+            "type": "string"
+          },
+          "disciplina": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disciplina"
+          },
+          "disciplina_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disciplina Id"
+          },
+          "duracao_planejada_s": {
+            "title": "Duracao Planejada S",
+            "type": "integer"
+          },
+          "duracao_real_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duracao Real S"
+          },
+          "emergencias": {
+            "title": "Emergencias",
+            "type": "integer"
+          },
+          "foco_efetivo_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foco Efetivo S"
+          },
+          "fora_s": {
+            "title": "Fora S",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "iniciada_em": {
+            "format": "date-time",
+            "title": "Iniciada Em",
+            "type": "string"
+          },
+          "interrupcoes": {
+            "title": "Interrupcoes",
+            "type": "integer"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          },
+          "metodo": {
+            "enum": [
+              "pomodoro",
+              "bloco",
+              "52_17",
+              "personalizado"
+            ],
+            "title": "Metodo",
+            "type": "string"
+          },
+          "pausas_s": {
+            "title": "Pausas S",
+            "type": "integer"
+          },
+          "sistema": {
+            "enum": [
+              "windows",
+              "macos",
+              "linux",
+              "web"
+            ],
+            "title": "Sistema",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "em_andamento",
+              "concluida",
+              "abandonada"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "terminada_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminada Em"
+          }
+        },
+        "required": [
+          "id",
+          "chave",
+          "disciplina_id",
+          "disciplina",
+          "metodo",
+          "status",
+          "meta",
+          "sistema",
+          "iniciada_em",
+          "terminada_em",
+          "dia",
+          "duracao_planejada_s",
+          "duracao_real_s",
+          "pausas_s",
+          "fora_s",
+          "interrupcoes",
+          "emergencias",
+          "foco_efetivo_s"
+        ],
+        "title": "SessaoLer",
         "type": "object"
       },
       "TentativaEntrada": {
@@ -4111,6 +4614,108 @@
         "summary": "Revisar",
         "tags": [
           "revisoes"
+        ]
+      }
+    },
+    "/sessoes": {
+      "get": {
+        "description": "Sessões mais recentes, com foco efetivo, pausas e interrupções.",
+        "operationId": "listar_sessoes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SessaoLer"
+                  },
+                  "title": "Response Listar Sessoes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Listar",
+        "tags": [
+          "sessoes"
+        ]
+      }
+    },
+    "/sessoes/sincronizar": {
+      "post": {
+        "description": "Recebe um lote de sessões de estudo do app desktop (com pausas e eventos).\n\nIdempotente: reenviar o mesmo lote não duplica nada. Cada sessão volta com o seu\nresultado (criada, atualizada, sem_mudanca ou recusada); uma sessão recusada não\nimpede as outras de serem gravadas.",
+        "operationId": "sincronizar_sessoes_sincronizar_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoteSessoes"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoSincronizacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Sincronizar",
+        "tags": [
+          "sessoes"
         ]
       }
     }

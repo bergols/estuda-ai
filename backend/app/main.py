@@ -18,6 +18,7 @@ from app.routers import (
     perguntar,
     questoes,
     revisoes,
+    sessoes,
 )
 
 app = FastAPI(title="estuda-ai", version="0.1.0")
@@ -31,6 +32,7 @@ app.include_router(questoes.router)
 app.include_router(gastos.router)
 app.include_router(revisoes.router)
 app.include_router(analytics.router)
+app.include_router(sessoes.router)
 
 
 @app.get("/health")

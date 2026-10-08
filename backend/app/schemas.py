@@ -7,11 +7,11 @@ primeira linha de defesa, o banco é a última.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
-
-from typing import Literal
+from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import (
+    AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
@@ -390,3 +390,92 @@ class TokenSaida(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     expira_em: datetime
+
+
+# ------------------------------------------------------------- sessões de estudo (fase 7)
+#
+# O app desktop manda LOTES de sessões, cada uma com as suas pausas e eventos, e pode
+# mandar o mesmo lote de novo (reenvio depois de timeout ou de horas offline). Aqui só
+# formato e tamanho; as regras de cada método ficam nos CHECKs do banco, e uma sessão
+# recusada não derruba o lote inteiro (ver servicos/sessoes.py).
+
+MetodoSessao = Literal["pomodoro", "bloco", "52_17", "personalizado"]
+StatusSessao = Literal["em_andamento", "concluida", "abandonada"]
+Sistema = Literal["windows", "macos", "linux", "web"]
+# Datas com fuso obrigatório: "2026-10-08T10:00:00" sem fuso seria ambíguo
+Instante = AwareDatetime
+
+
+class PausaEnvio(BaseModel):
+    chave: UUID
+    tipo: Literal["curta", "longa", "manual"]
+    iniciada_em: Instante
+    terminada_em: Instante
+
+
+class EventoFocoEnvio(BaseModel):
+    chave: UUID
+    tipo: Literal["saida_janela", "programa_bloqueado", "site_bloqueado", "saida_emergencia"]
+    ocorrido_em: Instante
+    duracao_s: int | None = Field(default=None, ge=0, le=86_400)
+    detalhe: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class SessaoEnvio(BaseModel):
+    chave: UUID
+    metodo: MetodoSessao
+    foco_min: int = Field(ge=1, le=240)
+    pausa_min: int = Field(ge=0, le=60)
+    ciclos: int = Field(ge=1, le=12)
+    pausa_longa_min: int | None = Field(default=None, ge=1, le=90)
+    ciclos_ate_pausa_longa: int | None = Field(default=None, ge=2, le=12)
+    meta: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)] | None = None
+    disciplina_id: int | None = None
+    sistema: Sistema
+    status: StatusSessao
+    iniciada_em: Instante
+    terminada_em: Instante | None = None
+    pausas: list[PausaEnvio] = Field(default=[], max_length=200)
+    eventos: list[EventoFocoEnvio] = Field(default=[], max_length=1000)
+
+
+class LoteSessoes(BaseModel):
+    sessoes: list[SessaoEnvio] = Field(min_length=1, max_length=50)
+
+
+class ResultadoSessao(BaseModel):
+    chave: UUID
+    # criada: primeira vez; atualizada: mudou de status; sem_mudanca: reenvio (nada a
+    # fazer); recusada: violou uma regra (o app não deve reenviar esta sessão)
+    resultado: Literal["criada", "atualizada", "sem_mudanca", "recusada"]
+    id: int | None = None
+    pausas_novas: int = 0
+    eventos_novos: int = 0
+    # A disciplina não existe (ou não é do usuário): a sessão foi gravada sem ela
+    disciplina_descartada: bool = False
+    erro: str | None = None
+
+
+class ResultadoSincronizacao(BaseModel):
+    sessoes: list[ResultadoSessao]
+
+
+class SessaoLer(BaseModel):
+    id: int
+    chave: UUID
+    disciplina_id: int | None
+    disciplina: str | None
+    metodo: MetodoSessao
+    status: StatusSessao
+    meta: str | None
+    sistema: Sistema
+    iniciada_em: datetime
+    terminada_em: datetime | None
+    dia: date
+    duracao_planejada_s: int
+    duracao_real_s: int | None
+    pausas_s: int
+    fora_s: int
+    interrupcoes: int
+    emergencias: int
+    foco_efetivo_s: int | None

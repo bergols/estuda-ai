@@ -10,6 +10,7 @@ O meta-teste no fim lê as rotas do OpenAPI: uma rota nova sem caso aqui faz o t
 falhar, para ninguém esquecer de pensar no isolamento dela.
 """
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -26,6 +27,7 @@ from app.models import (
     Material,
     Questao,
     Revisao,
+    SessaoEstudo,
     Tentativa,
     Trecho,
 )
@@ -33,6 +35,7 @@ from app.servicos import analytics
 from tests.conftest import cabecalho, criar_pdf
 
 PUBLICAS = {("GET", "/health"), ("POST", "/auth/login")}
+CHAVE_DA_VITIMA = uuid.uuid4()
 
 
 @pytest.fixture
@@ -62,6 +65,11 @@ def vitima(session, outro_usuario, usuario):
     session.add(Geracao(usuario_id=outro_usuario.id, disciplina_id=d.id, tipo="pergunta",
                         modelo="claude-haiku-4-5-20251001", custo_usd=Decimal("0.5"),
                         duracao_ms=1, status="sucesso"))
+    # Sessão de estudo da vítima (fase 7), com chave conhecida
+    session.add(SessaoEstudo(usuario_id=outro_usuario.id, disciplina_id=d.id, chave=CHAVE_DA_VITIMA,
+                             metodo="pomodoro", foco_min=25, pausa_min=5, ciclos=1,
+                             meta="meta secreta", sistema="macos", status="em_andamento",
+                             iniciada_em=agora - timedelta(hours=1)))
     # disciplina do PRÓPRIO atacante, para os casos "misturados"
     propria = Disciplina(usuario_id=usuario.id, nome="Minha")
     session.add(propria)
@@ -149,7 +157,30 @@ CASOS_LISTAS = [
     ("GET", "/analytics/custos", lambda r: _vazio(r.json()["dados"])),
     ("POST", "/analytics/atualizar", _sem_texto_secreto),  # global, não devolve dados
     ("POST", "/auth/sair-de-todos", lambda r: None),  # só afeta o próprio (conferido abaixo)
+    ("GET", "/sessoes", lambda r: _vazio(r.json())),
+    # Mesma CHAVE e disciplina da vítima: cria uma sessão do atacante, sem disciplina, e
+    # não "atualiza" a da vítima (conferido em test_nada_da_vitima_mudou)
+    ("POST", "/sessoes/sincronizar",
+     lambda r: _sessao_isolada(r.json()["sessoes"][0])),
 ]
+
+
+def _sessao_isolada(resultado):
+    assert resultado["resultado"] == "criada"
+    assert resultado["disciplina_descartada"] is True
+
+
+def _corpo_da_rota(metodo, caminho, vitima):
+    if (metodo, caminho) == ("POST", "/disciplinas"):
+        return {"json": {"nome": "Nova minha"}}
+    if (metodo, caminho) == ("POST", "/sessoes/sincronizar"):
+        return {"json": {"sessoes": [{
+            "chave": str(CHAVE_DA_VITIMA), "disciplina_id": vitima["d"], "metodo": "pomodoro",
+            "foco_min": 25, "pausa_min": 5, "ciclos": 1, "sistema": "windows",
+            "status": "abandonada", "iniciada_em": "2026-10-08T10:00:00+00:00",
+            "terminada_em": "2026-10-08T10:05:00+00:00",
+        }]}}
+    return {}
 
 
 def _vazio(lista):
@@ -163,8 +194,7 @@ def _zero(valor):
 @pytest.mark.parametrize(("metodo", "caminho", "verificar"), CASOS_LISTAS,
                          ids=[f"{m} {c}" for m, c, _ in CASOS_LISTAS])
 def test_rotas_sem_id_nao_mostram_dados_da_vitima(client, headers, vitima, metodo, caminho, verificar):
-    kwargs = {"json": {"nome": "Nova minha"}} if (metodo, caminho) == ("POST", "/disciplinas") else {}
-    resposta = client.request(metodo, caminho, headers=headers, **kwargs)
+    resposta = client.request(metodo, caminho, headers=headers, **_corpo_da_rota(metodo, caminho, vitima))
     assert resposta.status_code < 400, resposta.text
     verificar(resposta)
 
@@ -172,6 +202,12 @@ def test_rotas_sem_id_nao_mostram_dados_da_vitima(client, headers, vitima, metod
 def test_nada_da_vitima_mudou(client, headers, vitima, session, outro_usuario):
     for metodo, caminho, kwargs in CASOS_404:
         client.request(metodo, caminho.format(**vitima), headers=headers, **_corpo(kwargs))
+    # Rotas sem id, com o token ainda válido (o "sair de todos" fica por último)
+    for metodo, caminho, _ in CASOS_LISTAS:
+        if caminho != "/auth/sair-de-todos":
+            resposta = client.request(metodo, caminho, headers=headers,
+                                      **_corpo_da_rota(metodo, caminho, vitima))
+            assert resposta.status_code < 400, (caminho, resposta.text)
     client.post("/auth/sair-de-todos", headers=headers)
 
     assert session.get(Disciplina, vitima["d"]).nome == "Segredos da vítima"
@@ -179,6 +215,12 @@ def test_nada_da_vitima_mudou(client, headers, vitima, session, outro_usuario):
     assert session.get(Revisao, vitima["c"]).versao == 0
     assert session.scalar(text("SELECT count(*) FROM tentativas WHERE questao_id = :q"),
                           {"q": vitima["q"]}) == 1
+    # a sessão da vítima continua em andamento e na disciplina dela
+    linha = session.execute(
+        text("SELECT status, disciplina_id FROM sessoes_estudo WHERE chave = :c AND usuario_id = :u"),
+        {"c": CHAVE_DA_VITIMA, "u": outro_usuario.id},
+    ).one()
+    assert tuple(linha) == ("em_andamento", vitima["d"])
     # o "sair de todos" do atacante não derrubou a vítima
     assert client.get("/auth/eu", headers=cabecalho(outro_usuario)).status_code == 200
 

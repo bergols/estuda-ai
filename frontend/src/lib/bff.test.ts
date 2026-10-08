@@ -9,6 +9,7 @@ describe("allowlist do repasse /api/<caminho>", () => {
     [["revisoes", "hoje"]],
     [["analytics", "evolucao", "diaria"]],
     [["gastos"]],
+    [["sessoes", "sincronizar"]],
     [["auth", "eu"]],
     [["auth", "sair-de-todos"]],
   ])("repassa %j", (partes) => {
