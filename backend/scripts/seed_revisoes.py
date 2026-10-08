@@ -19,6 +19,10 @@ Cada aluno tem 4 disciplinas x 5 tópicos e, dia a dia, no fuso de São Paulo:
   atraso, pela maturidade do card e pela habilidade do aluno, e o SM-2 da API;
 - questões de múltipla escolha (criadas por uma geração no 1o dia) respondidas
   com um distrator "mais tentador";
+- sessões de estudo (fase 7) na maioria dos dias com revisão, terminando pouco antes
+  delas, com pausas e interrupções; sorteadas com um RNG PRÓPRIO, para não mudar a
+  sequência do RNG principal (os números da documentação das fases 4 e 5 continuam
+  os mesmos);
 - uma apostila (material com 4 trechos) por tópico. Cada card e cada questão fica
   ligado a um trecho do seu tópico; 20% dos cards também a um trecho de OUTRO
   material (relação N:N: é o que faz contagens "por material" inflarem se a
@@ -39,6 +43,7 @@ import argparse
 import hashlib
 import random
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -114,6 +119,9 @@ class Simulacao:
     questoes: list[Questao]
     tentativas: list[tuple]
     geracoes: list[Geracao]
+    # Instante em que as revisões de cada dia de estudo começaram (para as sessões)
+    inicios_de_estudo: list[datetime] = field(default_factory=list)
+    sessoes: list[dict] = field(default_factory=list)
 
 
 def momento_local(dia: date, hora: float) -> datetime:
@@ -179,6 +187,7 @@ def simular(dias: int, rng: random.Random, habilidade: float) -> Simulacao:
     tentativas: list[tuple] = []  # (questao, alternativa_escolhida, quando, tempo_ms)
     geracoes: list[Geracao] = []
     questoes_criadas = False
+    inicios_de_estudo: list[datetime] = []
 
     for n in range(dias):
         dia = inicio + timedelta(days=n)
@@ -186,6 +195,7 @@ def simular(dias: int, rng: random.Random, habilidade: float) -> Simulacao:
         if rng.random() > (0.6 if fim_de_semana else 0.88):
             continue  # faltou: os vencidos acumulam atraso
         agora = momento_local(dia, rng.uniform(18.5, 22.5))
+        inicios_de_estudo.append(agora)  # sem consumir o rng
 
         if not questoes_criadas:  # uma geração de questões por disciplina no 1o dia
             for d in DISCIPLINAS:
@@ -238,7 +248,61 @@ def simular(dias: int, rng: random.Random, habilidade: float) -> Simulacao:
     # Gerações com instantes distintos: o instante serve de chave para ler os ids de volta.
     for i, g in enumerate(sorted(geracoes, key=lambda g: g.criado_em)):
         g.criado_em += timedelta(microseconds=i)
-    return Simulacao(ativos, historico, [q for q in questoes if q.criado_em], tentativas, geracoes)
+    return Simulacao(ativos, historico, [q for q in questoes if q.criado_em], tentativas, geracoes,
+                     inicios_de_estudo)
+
+
+# Sessões de estudo (fase 7): (método, foco, pausa, ciclos, pausa longa, a cada)
+CONFIGS_SESSAO = {
+    "pomodoro": lambda rng: (25, 5, rng.randint(2, 4), 15, 4),
+    "bloco": lambda rng: (rng.choice([45, 60, 90]), 0, 1, None, None),
+    "52_17": lambda rng: (52, 17, rng.randint(1, 2), None, None),
+    "personalizado": lambda rng: (40, 10, 2, None, None),
+}
+
+
+def simular_sessoes(inicios: list[datetime], rng: random.Random) -> list[dict]:
+    """Uma sessão em ~75% dos dias de estudo, terminando de 2 a 45 min antes das
+    revisões. 15% abandonadas no meio. Pausas planejadas entre os focos cumpridos;
+    saídas da janela (10 s a 4 min) e tentativas de abrir o Discord."""
+    sessoes = []
+    for revisoes_em in inicios:
+        if rng.random() > 0.75:
+            continue
+        metodo = rng.choices(list(CONFIGS_SESSAO), weights=[5, 2, 2, 1])[0]
+        foco, pausa, ciclos, longa, a_cada = CONFIGS_SESSAO[metodo](rng)
+        abandonada = rng.random() < 0.15
+        focos_cumpridos = rng.randint(0, ciclos - 1) if abandonada else ciclos
+        fim = revisoes_em - timedelta(minutes=rng.uniform(2, 45))
+        pausas, eventos = [], []
+        t = 0.0  # minutos desde o início
+        for c in range(1, ciclos + 1):
+            if c > focos_cumpridos:
+                t += foco * rng.uniform(0.2, 0.8)  # parou no meio deste foco
+                break
+            t += foco
+            if c < ciclos and pausa:
+                duracao = longa if longa and c % a_cada == 0 else pausa
+                pausas.append((t, duracao, "longa" if duracao == longa and longa else "curta"))
+                t += duracao
+        inicio = fim - timedelta(minutes=t)
+        for _ in range(rng.choices([0, 1, 2, 3, 4], weights=[3, 4, 3, 2, 1])[0]):
+            eventos.append(("saida_janela", inicio + timedelta(minutes=rng.uniform(0, t)),
+                            rng.randint(10, 240), None))
+        for _ in range(rng.choices([0, 1, 2], weights=[6, 3, 1])[0]):
+            eventos.append(("programa_bloqueado", inicio + timedelta(minutes=rng.uniform(0, t)),
+                            None, rng.choice(["Discord", "Discord.exe", "Steam"])))
+        sessoes.append({
+            "chave": uuid.UUID(int=rng.getrandbits(128), version=4),
+            "disciplina": rng.choice(list(DISCIPLINAS)), "metodo": metodo, "foco": foco,
+            "pausa": pausa, "ciclos": ciclos, "longa": longa, "a_cada": a_cada,
+            "sistema": rng.choice(["macos", "windows"]),
+            "status": "abandonada" if abandonada else "concluida", "inicio": inicio, "fim": fim,
+            "pausas": [(inicio + timedelta(minutes=m), inicio + timedelta(minutes=m + d), tipo)
+                       for m, d, tipo in pausas],
+            "eventos": eventos,
+        })
+    return sessoes
 
 
 def gravar(cur, email: str, nome: str, sim: Simulacao) -> int:
@@ -393,12 +457,39 @@ def gravar(cur, email: str, nome: str, sim: Simulacao) -> int:
             qid = id_da_questao[(q.disciplina, q.enunciado)]
             copy.write_row((qid, alternativa_id[(qid, "ABCD"[escolhida])],
                             escolhida == q.correta, tempo, quando))
+
+    # Sessões de estudo (fase 7): COPY das sessões, ids lidos de volta pela chave
+    with cur.copy(
+        "COPY sessoes_estudo (usuario_id, disciplina_id, chave, metodo, foco_min, pausa_min, "
+        "ciclos, pausa_longa_min, ciclos_ate_pausa_longa, sistema, status, iniciada_em, "
+        "terminada_em) FROM STDIN"
+    ) as copy:
+        for s in sim.sessoes:
+            copy.write_row((usuario_id, disciplina_id[s["disciplina"]], s["chave"], s["metodo"],
+                            s["foco"], s["pausa"], s["ciclos"], s["longa"], s["a_cada"],
+                            s["sistema"], s["status"], s["inicio"], s["fim"]))
+    id_da_sessao = dict(cur.execute(
+        "SELECT chave, id FROM sessoes_estudo WHERE usuario_id = %s", (usuario_id,)
+    ).fetchall())
+    with cur.copy(
+        "COPY pausas_sessao (sessao_id, chave, tipo, iniciada_em, terminada_em) FROM STDIN"
+    ) as copy:
+        for s in sim.sessoes:
+            for ini, fim, tipo in s["pausas"]:
+                copy.write_row((id_da_sessao[s["chave"]], uuid.uuid4(), tipo, ini, fim))
+    with cur.copy(
+        "COPY eventos_foco (sessao_id, chave, tipo, ocorrido_em, duracao_s, detalhe) FROM STDIN"
+    ) as copy:
+        for s in sim.sessoes:
+            for tipo, quando, duracao, detalhe in s["eventos"]:
+                copy.write_row((id_da_sessao[s["chave"]], uuid.uuid4(), tipo, quando, duracao,
+                                detalhe))
     return usuario_id
 
 
 def main(dias: int, alunos: int, senha_dev: bool = False) -> None:
     t0 = time.perf_counter()
-    totais = {"cards": 0, "revisoes": 0, "tentativas": 0, "geracoes": 0}
+    totais = {"cards": 0, "revisoes": 0, "tentativas": 0, "geracoes": 0, "sessoes": 0}
     with psycopg.connect(url_psycopg()) as conn:  # uma transação até o commit()
         cur = conn.cursor()
         cur.execute(
@@ -416,6 +507,7 @@ def main(dias: int, alunos: int, senha_dev: bool = False) -> None:
             rng = random.Random(2026 + n)
             habilidade = 0.0 if n == 0 else rng.gauss(0, 0.08)
             sim = simular(dias, rng, habilidade)
+            sim.sessoes = simular_sessoes(sim.inicios_de_estudo, random.Random(9000 + n))
             email, nome = (EMAIL, "Estudante") if n == 0 else (
                 f"aluno-{n:03d}@estuda-ai.local", f"Aluno {n:03d}")
             usuario_id = gravar(cur, email, nome, sim)
@@ -425,6 +517,7 @@ def main(dias: int, alunos: int, senha_dev: bool = False) -> None:
             totais["revisoes"] += len(sim.historico)
             totais["tentativas"] += len(sim.tentativas)
             totais["geracoes"] += len(sim.geracoes)
+            totais["sessoes"] += len(sim.sessoes)
             if n and n % 25 == 0:
                 # Estatísticas atualizadas DURANTE a carga. Sem isto, o planejador
                 # acha que as tabelas ainda estão quase vazias e lê os ids de volta
@@ -464,7 +557,7 @@ def main(dias: int, alunos: int, senha_dev: bool = False) -> None:
     print(
         f"{alunos} aluno(s) em {dias} dias: {totais['cards']:,} cards, "
         f"{totais['revisoes']:,} revisões, {totais['tentativas']:,} tentativas, "
-        f"{totais['geracoes']:,} gerações; estudante = usuário {estudante_id} "
+        f"{totais['geracoes']:,} gerações, {totais['sessoes']:,} sessões de estudo; estudante = usuário {estudante_id} "
         f"({vencidos} cards vencidos agora); refresh da MV em {duracao} ms; "
         f"total {time.perf_counter() - t0:.1f}s"
     )
