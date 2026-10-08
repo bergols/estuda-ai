@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, dados, type Esquemas } from "./api";
 
@@ -218,5 +218,73 @@ export function useRevisar() {
       dados(api.POST("/revisoes/{flashcard_id}", { params: { path: { flashcard_id: flashcardId } }, body: corpo })),
     // A fila NÃO é invalidada aqui (ver useFilaDoDia); o analytics sim.
     onSuccess: () => cliente.invalidateQueries({ queryKey: ["analytics"] }),
+  });
+}
+
+// ------------------------------------------------------------- analytics
+
+/** Opções comuns: ao trocar o filtro, a tela mantém o desenho anterior (esmaecido)
+ * até os dados novos chegarem, em vez de piscar um "carregando". */
+const filtro = (disciplinaId?: number) => ({ params: { query: { disciplina_id: disciplinaId } } });
+const comum = { placeholderData: keepPreviousData };
+
+export function useSequencia(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("sequencia", d), queryFn: () => dados(api.GET("/analytics/sequencia", filtro(d))), ...comum });
+}
+export function useEvolucaoDiaria(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("evolucao-diaria", d), queryFn: () => dados(api.GET("/analytics/evolucao/diaria", filtro(d))), ...comum });
+}
+export function useEvolucaoSemanal(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("evolucao-semanal", d), queryFn: () => dados(api.GET("/analytics/evolucao/semanal", filtro(d))), ...comum });
+}
+export function useCalendario(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("calendario", d), queryFn: () => dados(api.GET("/analytics/calendario", filtro(d))), ...comum });
+}
+export function usePrevisao(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("previsao", d), queryFn: () => dados(api.GET("/analytics/previsao", filtro(d))), ...comum });
+}
+export function useCardsDificeis(d?: number) {
+  return useQuery({
+    queryKey: chaves.analytics("cards-dificeis", d),
+    queryFn: () => dados(api.GET("/analytics/cards-dificeis", { params: { query: { disciplina_id: d, limite: 10 } } })),
+    ...comum,
+  });
+}
+export function useCustos(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("custos", d), queryFn: () => dados(api.GET("/analytics/custos", filtro(d))), ...comum });
+}
+
+/** REFRESH da materialized view (pela função SECURITY DEFINER na API). */
+export function useAtualizarAnalytics() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: () => dados(api.POST("/analytics/atualizar")),
+    onSuccess: () => cliente.invalidateQueries({ queryKey: ["analytics"] }),
+  });
+}
+
+// --------------------------------------------------------------------- conta
+
+export function useGastos() {
+  return useQuery({ queryKey: chaves.gastos, queryFn: () => dados(api.GET("/gastos")) });
+}
+
+/** Sair deste aparelho: o BFF apaga o cookie. */
+async function apagarCookie() {
+  await fetch("/api/sessao", { method: "DELETE" });
+}
+
+export function useSair() {
+  return useMutation({ mutationFn: apagarCookie });
+}
+
+/** Sair de TODOS os aparelhos: a API incrementa versao_token (todo JWT emitido antes
+ * deixa de valer) e depois o cookie deste aparelho também é apagado. */
+export function useSairDeTodos() {
+  return useMutation({
+    mutationFn: async () => {
+      await dados(api.POST("/auth/sair-de-todos"));
+      await apagarCookie();
+    },
   });
 }

@@ -25,3 +25,11 @@ export function paginas(inicio: number | null | undefined, fim: number | null | 
   if (inicio == null) return null;
   return fim && fim !== inicio ? `p. ${inicio}–${fim}` : `p. ${inicio}`;
 }
+
+/** "2026-10-01" (primeiro dia do mês) → "out/26". Meio-dia: longe da virada de fuso. */
+export function mes(isoDia: string) {
+  const d = new Date(`${isoDia}T12:00`);
+  return `${d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}/${String(d.getFullYear()).slice(2)}`;
+}
+
+export const usd = (v: string | number) => `US$ ${Number(v).toFixed(4)}`;

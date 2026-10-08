@@ -49,6 +49,28 @@
   color-scheme: dark;
 }
 
+/*
+ * Cores dos gráficos (validadas com o validador de paletas da skill de dataviz):
+ * destaque = a série que importa; contexto = o resto, recessivo de propósito.
+ * Claro: separação CVD 19,2 e contraste >= 3:1. Escuro: o vinho do texto (#e08a7c)
+ * é claro demais para marcas; #d4705f fica na faixa do escuro, e o cinza desce a
+ * #5a554d para separar pela luminosidade (contraste 2,3: todo gráfico tem tabela).
+ */
+:root {
+  --grafico-destaque: #8c2f27;
+  --grafico-contexto: #8f8a80;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --grafico-destaque: #d4705f;
+    --grafico-contexto: #5a554d;
+  }
+}
+:root[data-tema="escuro"] {
+  --grafico-destaque: #d4705f;
+  --grafico-contexto: #5a554d;
+}
+
 @theme inline {
   --color-papel: var(--papel);
   --color-tarja: var(--tarja);
@@ -59,6 +81,8 @@
   --color-certo: var(--certo);
   --color-errado: var(--errado);
   --color-alerta: var(--alerta);
+  --color-destaque: var(--grafico-destaque);
+  --color-contexto: var(--grafico-contexto);
   --font-serif: var(--fonte-serifa), Georgia, serif;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
