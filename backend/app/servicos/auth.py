@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
-from sqlalchemy import select, update
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -47,10 +47,23 @@ def gerar_hash(senha: str) -> str:
     return _hasher.hash(senha)
 
 
+def consulta_por_email(email: str) -> Select[tuple[Usuario]]:
+    """lower(email) = lower(:email): a MESMA expressão do índice único
+    uq_usuarios_email_lower, então a busca usa o índice.
+
+    Não use ILIKE para "ignorar maiúsculas": em LIKE/ILIKE, % e _ são CURINGAS. Com
+    ILIKE, o e-mail "%" casava com qualquer conta (bastava a senha certa) e cada
+    variação ("%", "%%", "d%") virava uma chave nova no limite de falhas por e-mail.
+    É uma injection sem SQL nenhum: o valor vai como bind parameter, mas o OPERADOR
+    interpreta o conteúdo. Além disso, ILIKE não usa o índice de lower(email).
+    """
+    return select(Usuario).where(func.lower(Usuario.email) == email.strip().lower())
+
+
 def autenticar(session: Session, email: str, senha: str) -> Usuario:
     """Devolve o usuário se e-mail e senha conferem; senão ErroAuth (mesma mensagem
     para "e-mail não existe" e "senha errada", para não revelar quais e-mails existem)."""
-    usuario = session.scalar(select(Usuario).where(Usuario.email.ilike(email.strip())))
+    usuario = session.scalar(consulta_por_email(email))
     if usuario is None or usuario.senha_hash is None:
         # Verifica contra um hash falso para o tempo de resposta ser o mesmo: sem isso,
         # "e-mail inexistente" responderia em 1 ms e "senha errada" em 40 ms, e o tempo

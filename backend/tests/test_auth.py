@@ -54,6 +54,27 @@ def test_senha_errada_e_email_inexistente_dao_a_mesma_resposta(client, com_senha
     assert errada.json() == inexistente.json()  # não revela quais e-mails existem
 
 
+@pytest.mark.parametrize("curinga", ["%", "dona@%", "d_na@furg.br", "%@furg.br"])
+def test_curingas_do_like_nao_casam_com_contas(client, com_senha, curinga):
+    """Em LIKE/ILIKE, % e _ são curingas. Se o e-mail fosse comparado com ILIKE, "%"
+    casaria com QUALQUER conta: com a senha certa entraria sem saber o e-mail, e cada
+    variação ("%", "%%", "d%") seria uma chave nova no limite por e-mail."""
+    assert login(client, curinga, SENHA).status_code == 401
+
+
+def test_busca_do_email_usa_o_indice_de_lower(session, com_senha):
+    """A comparação precisa ser lower(email) = ..., a MESMA expressão do índice único.
+    Com 2 linhas na tabela o planejador preferiria o seq scan; desligá-lo mostra se o
+    índice PODE ser usado (com ILIKE, não poderia nem assim)."""
+    session.execute(text("SET LOCAL enable_seqscan = off"))
+    plano = session.scalars(
+        text("EXPLAIN (COSTS OFF) " + str(
+            auth.consulta_por_email("dona@furg.br").compile(compile_kwargs={"literal_binds": True})
+        ))
+    ).all()
+    assert any("uq_usuarios_email_lower" in linha for linha in plano), plano
+
+
 def test_conta_sem_senha_nao_faz_login(client, usuario):
     assert usuario.senha_hash is None
     assert login(client, usuario.email, SENHA).status_code == 401

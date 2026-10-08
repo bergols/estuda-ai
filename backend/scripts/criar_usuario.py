@@ -16,11 +16,9 @@ import getpass
 import os
 import sys
 
-from sqlalchemy import select
-
 from app.db import SessionLocal
 from app.models import Usuario
-from app.servicos.auth import SENHA_MINIMA, gerar_hash
+from app.servicos.auth import SENHA_MINIMA, consulta_por_email, gerar_hash
 
 
 def pedir_senha() -> str:
@@ -41,7 +39,7 @@ def main() -> None:
     args = parser.parse_args()
 
     with SessionLocal() as session:
-        usuario = session.scalar(select(Usuario).where(Usuario.email.ilike(args.email.strip())))
+        usuario = session.scalar(consulta_por_email(args.email))
         if args.redefinir_senha:
             if usuario is None:
                 sys.exit(f"Não existe usuário com o e-mail {args.email}.")
