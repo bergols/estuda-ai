@@ -15,6 +15,7 @@ estão em docs/analytics.md. Convenções:
   dia com 80.
 """
 
+import re
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -25,8 +26,21 @@ from sqlalchemy.orm import Session
 MV = "mv_respostas_diarias"
 
 
+# Só nomes de coluna simples ("tabela.coluna") podem entrar no TEXTO do SQL. Os
+# VALORES vão sempre como parâmetros (:nome). Hoje as colunas são constantes do
+# código; a checagem garante que continue assim (defesa em profundidade contra SQL
+# injection, ver docs/seguranca.md).
+_IDENTIFICADOR = re.compile(r"[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)?")
+
+
+def _coluna(coluna: str) -> str:
+    if not _IDENTIFICADOR.fullmatch(coluna):
+        raise ValueError(f"nome de coluna inválido: {coluna!r}")
+    return coluna
+
+
 def _filtro(coluna: str, valor) -> str:
-    return f"AND {coluna} = :disciplina_id" if valor is not None else ""
+    return f"AND {_coluna(coluna)} = :disciplina_id" if valor is not None else ""
 
 
 def _periodo(coluna: str, de: date | None, ate: date | None) -> str:
@@ -42,6 +56,7 @@ def _periodo(coluna: str, de: date | None, ate: date | None) -> str:
        linha e transformaria a condição num Join Filter (medido em
        docs/experimentos/analytics.md).
     """
+    coluna = _coluna(coluna)
     fuso = "(SELECT fuso_horario FROM usuarios WHERE id = :usuario_id)"
     trecho = ""
     if de is not None:
