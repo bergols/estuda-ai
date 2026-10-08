@@ -1,0 +1,7 @@
+# Falsos positivos JÁ no histórico, ignorados um a um pelo fingerprint
+# (commit:arquivo:regra:linha). Vale só para aquela ocorrência exata: a mesma frase
+# num commit novo seria detectada de novo. Antes de adicionar uma linha aqui,
+# confirme que NÃO é uma chave (se for, revogue-a no provedor primeiro).
+
+# docs/seguranca.md cita o exemplo do EXPLAIN "Group Key: <coluna>" entre crases
+85e4c28dfde19ed1641d8445beea1b8c66c349b0:docs/seguranca.md:generic-api-key:373

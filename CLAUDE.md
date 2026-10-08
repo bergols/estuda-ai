@@ -46,7 +46,7 @@ docker compose exec backend python -m scripts.seed_experimento   # 50 mil trecho
 docker compose exec backend python -m scripts.experimento_hnsw   # regenera docs/experimentos/hnsw.md
 docker compose exec backend python -m scripts.criar_usuario --email x@y.com --nome "X"  # única forma de criar conta
 docker compose exec backend ruff check .                         # lint (o mesmo do CI)
-docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git --redact /repo   # segredos no histórico
+docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git --redact --gitleaks-ignore-path /repo/.gitleaksignore /repo  # segredos no histórico (sem pipe!)
 ```
 
 Seeds: `scripts/seed_experimento.py` (50 mil trechos sintéticos, fase 2) e

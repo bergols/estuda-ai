@@ -370,9 +370,13 @@ não basta: a chave tem de ser **revogada** no provedor (e só depois, se quiser
 histórico reescrito).
 
 A primeira varredura achou 2 ocorrências, ambas falsos positivos: linhas de planos do
-`EXPLAIN` nos docs (`Group Key: disciplinas_do_aluno_1.id`), que a regra genérica lê como
-"chave: valor". O `.gitleaks.toml` abre exceção só para elas, com a linha inteira
-ancorada. Uma tentativa anterior, com `paths` numa allowlist global, fazia o gitleaks
+`EXPLAIN` nos docs (um rótulo como "Group Key" seguido de dois-pontos e do nome de uma
+coluna), que a regra genérica lê como "chave: valor". O `.gitleaks.toml` abre exceção só
+para elas, com a linha inteira ancorada.
+
+Outro falso positivo já commitado (esta própria seção citava o exemplo entre crases) está
+no `.gitleaksignore`, pelo **fingerprint**: commit + arquivo + regra + linha. É a exceção
+mais estreita possível; a mesma frase num commit novo seria detectada de novo. Uma tentativa anterior, com `paths` numa allowlist global, fazia o gitleaks
 pular o **arquivo inteiro** (testado: uma chave falsa no mesmo doc passava). Exceções
 largas escondem vazamentos de verdade.
 
