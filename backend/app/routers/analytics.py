@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.deps import SessionDep, UsuarioAtual
 from app.models import Disciplina
 from app.schemas import (
+    AcertoPosSessao,
     AcertoSemanal,
     AtualizacaoMVSaida,
     CardDificil,
@@ -14,11 +15,14 @@ from app.schemas import (
     DiaCalendario,
     EvolucaoDia,
     EvolucaoSemana,
+    FocoMetodo,
+    FocoPeriodo,
+    InterrupcoesSessao,
     PrevisaoDia,
     Sequencia,
     Serie,
 )
-from app.servicos import analytics
+from app.servicos import analytics, analytics_foco
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -164,3 +168,65 @@ def atualizar(usuario: UsuarioAtual, session: SessionDep):
     registradas depois do último refresh, sem bloquear quem está lendo."""
     a = analytics.atualizar_mv(session)
     return AtualizacaoMVSaida(atualizado_em=a.atualizado_em, duracao_ms=a.duracao_ms)
+
+
+# ------------------------------------------------------------- foco (fase 7)
+#
+# Lidas ao vivo (vw_sessoes_foco), não da materialized view: são poucas linhas por
+# usuário (uma por sessão) e a sessão recém-sincronizada deve aparecer na hora.
+
+
+@router.get("/foco/horas", response_model=Serie[FocoPeriodo])
+def foco_horas(
+    usuario: UsuarioAtual, session: SessionDep, disciplina_id: DisciplinaQ = None,
+    de: DeQ = None, ate: AteQ = None, agrupar: Literal["dia", "semana"] = "dia",
+):
+    """Foco efetivo (sem pausas nem tempo fora da janela) por dia ou semana.
+    Padrão: 30 dias (por dia) ou 12 semanas (por semana)."""
+    _validar(session, usuario, disciplina_id)
+    de, ate = _periodo(session, usuario, de, ate, 30 if agrupar == "dia" else 84)
+    dados = analytics_foco.horas(session, usuario_id=usuario.id, disciplina_id=disciplina_id,
+                                 de=de, ate=ate, unidade="day" if agrupar == "dia" else "week")
+    return Serie(de=de, ate=ate, dados=dados)
+
+
+@router.get("/foco/sessoes", response_model=Serie[FocoMetodo])
+def foco_sessoes(
+    usuario: UsuarioAtual, session: SessionDep, disciplina_id: DisciplinaQ = None,
+    de: DeQ = None, ate: AteQ = None,
+):
+    """Sessões concluídas e abandonadas por método, com a linha 'todos'. Padrão: 12 semanas."""
+    _validar(session, usuario, disciplina_id)
+    de, ate = _periodo(session, usuario, de, ate, 84)
+    dados = analytics_foco.sessoes_por_metodo(session, usuario_id=usuario.id,
+                                              disciplina_id=disciplina_id, de=de, ate=ate)
+    return Serie(de=de, ate=ate, dados=dados)
+
+
+@router.get("/foco/interrupcoes", response_model=Serie[InterrupcoesSessao])
+def foco_interrupcoes(
+    usuario: UsuarioAtual, session: SessionDep, disciplina_id: DisciplinaQ = None,
+    de: DeQ = None, ate: AteQ = None, limite: Annotated[int, Query(ge=1, le=200)] = 40,
+):
+    """Interrupções de cada sessão (as mais recentes do período). Padrão: 30 dias."""
+    _validar(session, usuario, disciplina_id)
+    de, ate = _periodo(session, usuario, de, ate, 30)
+    dados = analytics_foco.interrupcoes(session, usuario_id=usuario.id, disciplina_id=disciplina_id,
+                                        de=de, ate=ate, limite=limite)
+    return Serie(de=de, ate=ate, dados=dados)
+
+
+@router.get("/foco/acerto-pos-sessao", response_model=Serie[AcertoPosSessao])
+def foco_acerto_pos_sessao(
+    usuario: UsuarioAtual, session: SessionDep, disciplina_id: DisciplinaQ = None,
+    de: DeQ = None, ate: AteQ = None,
+    janela_min: Annotated[int, Query(ge=5, le=240, description="minutos depois do fim da sessão")] = 60,
+):
+    """Taxa de acerto (cards e questões) nas respostas dadas até `janela_min` minutos
+    depois de uma sessão de cada método, e sem sessão antes. Padrão: 12 semanas."""
+    _validar(session, usuario, disciplina_id)
+    de, ate = _periodo(session, usuario, de, ate, 84)
+    dados = analytics_foco.acerto_pos_sessao(session, usuario_id=usuario.id,
+                                             disciplina_id=disciplina_id, de=de, ate=ate,
+                                             janela_min=janela_min)
+    return Serie(de=de, ate=ate, dados=dados)

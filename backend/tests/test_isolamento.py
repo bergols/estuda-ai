@@ -68,8 +68,9 @@ def vitima(session, outro_usuario, usuario):
     # Sessão de estudo da vítima (fase 7), com chave conhecida
     session.add(SessaoEstudo(usuario_id=outro_usuario.id, disciplina_id=d.id, chave=CHAVE_DA_VITIMA,
                              metodo="pomodoro", foco_min=25, pausa_min=5, ciclos=1,
-                             meta="meta secreta", sistema="macos", status="em_andamento",
-                             iniciada_em=agora - timedelta(hours=1)))
+                             meta="meta secreta", sistema="macos", status="concluida",
+                             iniciada_em=agora - timedelta(hours=2),
+                             terminada_em=agora - timedelta(hours=1, minutes=30)))
     # disciplina do PRÓPRIO atacante, para os casos "misturados"
     propria = Disciplina(usuario_id=usuario.id, nome="Minha")
     session.add(propria)
@@ -158,6 +159,13 @@ CASOS_LISTAS = [
     ("POST", "/analytics/atualizar", _sem_texto_secreto),  # global, não devolve dados
     ("POST", "/auth/sair-de-todos", lambda r: None),  # só afeta o próprio (conferido abaixo)
     ("GET", "/sessoes", lambda r: _vazio(r.json())),
+    ("GET", "/analytics/foco/horas", lambda r: _zero(sum(x["sessoes"] for x in r.json()["dados"]))),
+    ("GET", "/analytics/foco/sessoes", lambda r: _zero(r.json()["dados"][-1]["sessoes"])),
+    ("GET", "/analytics/foco/interrupcoes", lambda r: _vazio(r.json()["dados"])),
+    # As respostas da vítima (revisão e tentativa de 1 h atrás, logo depois da sessão
+    # dela) não podem aparecer em grupo nenhum
+    ("GET", "/analytics/foco/acerto-pos-sessao",
+     lambda r: _zero(sum(x["respostas"] for x in r.json()["dados"]))),
     # Mesma CHAVE e disciplina da vítima: cria uma sessão do atacante, sem disciplina, e
     # não "atualiza" a da vítima (conferido em test_nada_da_vitima_mudou)
     ("POST", "/sessoes/sincronizar",
@@ -215,12 +223,12 @@ def test_nada_da_vitima_mudou(client, headers, vitima, session, outro_usuario):
     assert session.get(Revisao, vitima["c"]).versao == 0
     assert session.scalar(text("SELECT count(*) FROM tentativas WHERE questao_id = :q"),
                           {"q": vitima["q"]}) == 1
-    # a sessão da vítima continua em andamento e na disciplina dela
+    # a sessão da vítima continua concluída e na disciplina dela
     linha = session.execute(
         text("SELECT status, disciplina_id FROM sessoes_estudo WHERE chave = :c AND usuario_id = :u"),
         {"c": CHAVE_DA_VITIMA, "u": outro_usuario.id},
     ).one()
-    assert tuple(linha) == ("em_andamento", vitima["d"])
+    assert tuple(linha) == ("concluida", vitima["d"])
     # o "sair de todos" do atacante não derrubou a vítima
     assert client.get("/auth/eu", headers=cabecalho(outro_usuario)).status_code == 200
 

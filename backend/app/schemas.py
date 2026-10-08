@@ -378,6 +378,41 @@ class Serie[T](BaseModel):
     dados: list[T]
 
 
+class FocoPeriodo(BaseModel):
+    periodo: date  # o dia, ou a segunda-feira da semana
+    foco_s: int
+    sessoes: int
+    concluidas: int
+
+
+class FocoMetodo(BaseModel):
+    metodo: Literal["pomodoro", "bloco", "52_17", "personalizado", "todos"]
+    sessoes: int
+    concluidas: int
+    abandonadas: int
+    taxa_conclusao: Decimal | None
+    foco_medio_s: int | None
+
+
+class InterrupcoesSessao(BaseModel):
+    sessao_id: int
+    iniciada_em: datetime
+    dia: date
+    metodo: Literal["pomodoro", "bloco", "52_17", "personalizado"]
+    status: Literal["concluida", "abandonada"]
+    interrupcoes: int
+    fora_s: int
+    foco_efetivo_s: int
+    por_hora: Decimal | None
+
+
+class AcertoPosSessao(BaseModel):
+    grupo: Literal["pomodoro", "bloco", "52_17", "personalizado", "sem_sessao"]
+    respostas: int
+    acertos: int
+    taxa: Decimal | None
+
+
 class AtualizacaoMVSaida(BaseModel):
     atualizado_em: datetime
     duracao_ms: int

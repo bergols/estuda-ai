@@ -720,6 +720,14 @@ class SessaoEstudo(Base):
             "disciplina_id",
             postgresql_where=text("disciplina_id IS NOT NULL"),
         ),
+        # "Última sessão terminada antes desta resposta" (acerto após cada método)
+        Index(
+            "ix_sessoes_estudo_usuario_terminada_em",
+            "usuario_id",
+            "terminada_em",
+            postgresql_include=["metodo"],
+            postgresql_where=text("terminada_em IS NOT NULL"),
+        ),
     )
 
 

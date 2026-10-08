@@ -148,6 +148,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/analytics/foco/acerto-pos-sessao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Foco Acerto Pos Sessao
+         * @description Taxa de acerto (cards e questões) nas respostas dadas até `janela_min` minutos
+         *     depois de uma sessão de cada método, e sem sessão antes. Padrão: 12 semanas.
+         */
+        get: operations["foco_acerto_pos_sessao_analytics_foco_acerto_pos_sessao_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/foco/horas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Foco Horas
+         * @description Foco efetivo (sem pausas nem tempo fora da janela) por dia ou semana.
+         *     Padrão: 30 dias (por dia) ou 12 semanas (por semana).
+         */
+        get: operations["foco_horas_analytics_foco_horas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/foco/interrupcoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Foco Interrupcoes
+         * @description Interrupções de cada sessão (as mais recentes do período). Padrão: 30 dias.
+         */
+        get: operations["foco_interrupcoes_analytics_foco_interrupcoes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/foco/sessoes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Foco Sessoes
+         * @description Sessões concluídas e abandonadas por método, com a linha 'todos'. Padrão: 12 semanas.
+         */
+        get: operations["foco_sessoes_analytics_foco_sessoes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/analytics/previsao": {
         parameters: {
             query?: never;
@@ -627,6 +709,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcertoPosSessao */
+        AcertoPosSessao: {
+            /** Acertos */
+            acertos: number;
+            /**
+             * Grupo
+             * @enum {string}
+             */
+            grupo: "pomodoro" | "bloco" | "52_17" | "personalizado" | "sem_sessao";
+            /** Respostas */
+            respostas: number;
+            /** Taxa */
+            taxa: string | null;
+        };
         /** AcertoSemanal */
         AcertoSemanal: {
             /** Acertos */
@@ -971,6 +1067,38 @@ export interface components {
             /** Limiar Duplicata */
             limiar_duplicata: number;
         };
+        /** FocoMetodo */
+        FocoMetodo: {
+            /** Abandonadas */
+            abandonadas: number;
+            /** Concluidas */
+            concluidas: number;
+            /** Foco Medio S */
+            foco_medio_s: number | null;
+            /**
+             * Metodo
+             * @enum {string}
+             */
+            metodo: "pomodoro" | "bloco" | "52_17" | "personalizado" | "todos";
+            /** Sessoes */
+            sessoes: number;
+            /** Taxa Conclusao */
+            taxa_conclusao: string | null;
+        };
+        /** FocoPeriodo */
+        FocoPeriodo: {
+            /** Concluidas */
+            concluidas: number;
+            /** Foco S */
+            foco_s: number;
+            /**
+             * Periodo
+             * Format: date
+             */
+            periodo: string;
+            /** Sessoes */
+            sessoes: number;
+        };
         /** GastoMensal */
         GastoMensal: {
             /** Custo Usd */
@@ -1030,6 +1158,39 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** InterrupcoesSessao */
+        InterrupcoesSessao: {
+            /**
+             * Dia
+             * Format: date
+             */
+            dia: string;
+            /** Foco Efetivo S */
+            foco_efetivo_s: number;
+            /** Fora S */
+            fora_s: number;
+            /**
+             * Iniciada Em
+             * Format: date-time
+             */
+            iniciada_em: string;
+            /** Interrupcoes */
+            interrupcoes: number;
+            /**
+             * Metodo
+             * @enum {string}
+             */
+            metodo: "pomodoro" | "bloco" | "52_17" | "personalizado";
+            /** Por Hora */
+            por_hora: string | null;
+            /** Sessao Id */
+            sessao_id: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "concluida" | "abandonada";
         };
         /** LoteSessoes */
         LoteSessoes: {
@@ -1263,6 +1424,17 @@ export interface components {
             /** Maior Inicio */
             maior_inicio: string | null;
         };
+        /** Serie[AcertoPosSessao] */
+        Serie_AcertoPosSessao_: {
+            /** Ate */
+            ate?: string | null;
+            /** Atualizado Em */
+            atualizado_em?: string | null;
+            /** Dados */
+            dados: components["schemas"]["AcertoPosSessao"][];
+            /** De */
+            de?: string | null;
+        };
         /** Serie[AcertoSemanal] */
         Serie_AcertoSemanal_: {
             /** Ate */
@@ -1326,6 +1498,39 @@ export interface components {
             atualizado_em?: string | null;
             /** Dados */
             dados: components["schemas"]["EvolucaoSemana"][];
+            /** De */
+            de?: string | null;
+        };
+        /** Serie[FocoMetodo] */
+        Serie_FocoMetodo_: {
+            /** Ate */
+            ate?: string | null;
+            /** Atualizado Em */
+            atualizado_em?: string | null;
+            /** Dados */
+            dados: components["schemas"]["FocoMetodo"][];
+            /** De */
+            de?: string | null;
+        };
+        /** Serie[FocoPeriodo] */
+        Serie_FocoPeriodo_: {
+            /** Ate */
+            ate?: string | null;
+            /** Atualizado Em */
+            atualizado_em?: string | null;
+            /** Dados */
+            dados: components["schemas"]["FocoPeriodo"][];
+            /** De */
+            de?: string | null;
+        };
+        /** Serie[InterrupcoesSessao] */
+        Serie_InterrupcoesSessao_: {
+            /** Ate */
+            ate?: string | null;
+            /** Atualizado Em */
+            atualizado_em?: string | null;
+            /** Dados */
+            dados: components["schemas"]["InterrupcoesSessao"][];
             /** De */
             de?: string | null;
         };
@@ -1764,6 +1969,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Serie_EvolucaoSemana_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    foco_acerto_pos_sessao_analytics_foco_acerto_pos_sessao_get: {
+        parameters: {
+            query?: {
+                /** @description filtra por disciplina */
+                disciplina_id?: number | null;
+                /** @description data inicial (no fuso do usuário) */
+                de?: string | null;
+                /** @description data final, inclusive (padrão: hoje) */
+                ate?: string | null;
+                /** @description minutos depois do fim da sessão */
+                janela_min?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Serie_AcertoPosSessao_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    foco_horas_analytics_foco_horas_get: {
+        parameters: {
+            query?: {
+                /** @description filtra por disciplina */
+                disciplina_id?: number | null;
+                /** @description data inicial (no fuso do usuário) */
+                de?: string | null;
+                /** @description data final, inclusive (padrão: hoje) */
+                ate?: string | null;
+                agrupar?: "dia" | "semana";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Serie_FocoPeriodo_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    foco_interrupcoes_analytics_foco_interrupcoes_get: {
+        parameters: {
+            query?: {
+                /** @description filtra por disciplina */
+                disciplina_id?: number | null;
+                /** @description data inicial (no fuso do usuário) */
+                de?: string | null;
+                /** @description data final, inclusive (padrão: hoje) */
+                ate?: string | null;
+                limite?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Serie_InterrupcoesSessao_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    foco_sessoes_analytics_foco_sessoes_get: {
+        parameters: {
+            query?: {
+                /** @description filtra por disciplina */
+                disciplina_id?: number | null;
+                /** @description data inicial (no fuso do usuário) */
+                de?: string | null;
+                /** @description data final, inclusive (padrão: hoje) */
+                ate?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Serie_FocoMetodo_"];
                 };
             };
             /** @description Validation Error */

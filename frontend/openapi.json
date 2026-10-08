@@ -1,6 +1,49 @@
 {
   "components": {
     "schemas": {
+      "AcertoPosSessao": {
+        "properties": {
+          "acertos": {
+            "title": "Acertos",
+            "type": "integer"
+          },
+          "grupo": {
+            "enum": [
+              "pomodoro",
+              "bloco",
+              "52_17",
+              "personalizado",
+              "sem_sessao"
+            ],
+            "title": "Grupo",
+            "type": "string"
+          },
+          "respostas": {
+            "title": "Respostas",
+            "type": "integer"
+          },
+          "taxa": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxa"
+          }
+        },
+        "required": [
+          "grupo",
+          "respostas",
+          "acertos",
+          "taxa"
+        ],
+        "title": "AcertoPosSessao",
+        "type": "object"
+      },
       "AcertoSemanal": {
         "properties": {
           "acertos": {
@@ -940,6 +983,95 @@
         "title": "FlashcardsGeradosSaida",
         "type": "object"
       },
+      "FocoMetodo": {
+        "properties": {
+          "abandonadas": {
+            "title": "Abandonadas",
+            "type": "integer"
+          },
+          "concluidas": {
+            "title": "Concluidas",
+            "type": "integer"
+          },
+          "foco_medio_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foco Medio S"
+          },
+          "metodo": {
+            "enum": [
+              "pomodoro",
+              "bloco",
+              "52_17",
+              "personalizado",
+              "todos"
+            ],
+            "title": "Metodo",
+            "type": "string"
+          },
+          "sessoes": {
+            "title": "Sessoes",
+            "type": "integer"
+          },
+          "taxa_conclusao": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxa Conclusao"
+          }
+        },
+        "required": [
+          "metodo",
+          "sessoes",
+          "concluidas",
+          "abandonadas",
+          "taxa_conclusao",
+          "foco_medio_s"
+        ],
+        "title": "FocoMetodo",
+        "type": "object"
+      },
+      "FocoPeriodo": {
+        "properties": {
+          "concluidas": {
+            "title": "Concluidas",
+            "type": "integer"
+          },
+          "foco_s": {
+            "title": "Foco S",
+            "type": "integer"
+          },
+          "periodo": {
+            "format": "date",
+            "title": "Periodo",
+            "type": "string"
+          },
+          "sessoes": {
+            "title": "Sessoes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "periodo",
+          "foco_s",
+          "sessoes",
+          "concluidas"
+        ],
+        "title": "FocoPeriodo",
+        "type": "object"
+      },
       "GastoMensal": {
         "properties": {
           "custo_usd": {
@@ -1100,6 +1232,79 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InterrupcoesSessao": {
+        "properties": {
+          "dia": {
+            "format": "date",
+            "title": "Dia",
+            "type": "string"
+          },
+          "foco_efetivo_s": {
+            "title": "Foco Efetivo S",
+            "type": "integer"
+          },
+          "fora_s": {
+            "title": "Fora S",
+            "type": "integer"
+          },
+          "iniciada_em": {
+            "format": "date-time",
+            "title": "Iniciada Em",
+            "type": "string"
+          },
+          "interrupcoes": {
+            "title": "Interrupcoes",
+            "type": "integer"
+          },
+          "metodo": {
+            "enum": [
+              "pomodoro",
+              "bloco",
+              "52_17",
+              "personalizado"
+            ],
+            "title": "Metodo",
+            "type": "string"
+          },
+          "por_hora": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Por Hora"
+          },
+          "sessao_id": {
+            "title": "Sessao Id",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "concluida",
+              "abandonada"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessao_id",
+          "iniciada_em",
+          "dia",
+          "metodo",
+          "status",
+          "interrupcoes",
+          "fora_s",
+          "foco_efetivo_s",
+          "por_hora"
+        ],
+        "title": "InterrupcoesSessao",
         "type": "object"
       },
       "LoteSessoes": {
@@ -1746,6 +1951,58 @@
         "title": "Sequencia",
         "type": "object"
       },
+      "Serie_AcertoPosSessao_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/AcertoPosSessao"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[AcertoPosSessao]",
+        "type": "object"
+      },
       "Serie_AcertoSemanal_": {
         "properties": {
           "ate": {
@@ -2056,6 +2313,162 @@
           "dados"
         ],
         "title": "Serie[EvolucaoSemana]",
+        "type": "object"
+      },
+      "Serie_FocoMetodo_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/FocoMetodo"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[FocoMetodo]",
+        "type": "object"
+      },
+      "Serie_FocoPeriodo_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/FocoPeriodo"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[FocoPeriodo]",
+        "type": "object"
+      },
+      "Serie_InterrupcoesSessao_": {
+        "properties": {
+          "ate": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ate"
+          },
+          "atualizado_em": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atualizado Em"
+          },
+          "dados": {
+            "items": {
+              "$ref": "#/components/schemas/InterrupcoesSessao"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "de": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De"
+          }
+        },
+        "required": [
+          "dados"
+        ],
+        "title": "Serie[InterrupcoesSessao]",
         "type": "object"
       },
       "Serie_PrevisaoDia_": {
@@ -3275,6 +3688,426 @@
           }
         ],
         "summary": "Evolucao Semanal",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/foco/acerto-pos-sessao": {
+      "get": {
+        "description": "Taxa de acerto (cards e questões) nas respostas dadas até `janela_min` minutos\ndepois de uma sessão de cada método, e sem sessão antes. Padrão: 12 semanas.",
+        "operationId": "foco_acerto_pos_sessao_analytics_foco_acerto_pos_sessao_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          },
+          {
+            "description": "minutos depois do fim da sessão",
+            "in": "query",
+            "name": "janela_min",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "description": "minutos depois do fim da sessão",
+              "maximum": 240,
+              "minimum": 5,
+              "title": "Janela Min",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_AcertoPosSessao_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Foco Acerto Pos Sessao",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/foco/horas": {
+      "get": {
+        "description": "Foco efetivo (sem pausas nem tempo fora da janela) por dia ou semana.\nPadrão: 30 dias (por dia) ou 12 semanas (por semana).",
+        "operationId": "foco_horas_analytics_foco_horas_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agrupar",
+            "required": false,
+            "schema": {
+              "default": "dia",
+              "enum": [
+                "dia",
+                "semana"
+              ],
+              "title": "Agrupar",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_FocoPeriodo_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Foco Horas",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/foco/interrupcoes": {
+      "get": {
+        "description": "Interrupções de cada sessão (as mais recentes do período). Padrão: 30 dias.",
+        "operationId": "foco_interrupcoes_analytics_foco_interrupcoes_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 40,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_InterrupcoesSessao_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Foco Interrupcoes",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/foco/sessoes": {
+      "get": {
+        "description": "Sessões concluídas e abandonadas por método, com a linha 'todos'. Padrão: 12 semanas.",
+        "operationId": "foco_sessoes_analytics_foco_sessoes_get",
+        "parameters": [
+          {
+            "description": "filtra por disciplina",
+            "in": "query",
+            "name": "disciplina_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por disciplina",
+              "title": "Disciplina Id"
+            }
+          },
+          {
+            "description": "data inicial (no fuso do usuário)",
+            "in": "query",
+            "name": "de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data inicial (no fuso do usuário)",
+              "title": "De"
+            }
+          },
+          {
+            "description": "data final, inclusive (padrão: hoje)",
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "data final, inclusive (padrão: hoje)",
+              "title": "Ate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Serie_FocoMetodo_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Foco Sessoes",
         "tags": [
           "analytics"
         ]
