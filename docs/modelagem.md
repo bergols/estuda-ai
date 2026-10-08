@@ -30,6 +30,8 @@ Histórico de migrations:
 | `views_de_analytics` | 5 | `VIEW vw_respostas`, `MATERIALIZED VIEW mv_respostas_diarias` (+ índice único), tabela `atualizacoes_mv` |
 | `historico_revisoes_indice_include_nota` | 5 | índice do histórico com `INCLUDE (nota)`, trocado com `CREATE INDEX CONCURRENTLY` |
 | `autenticacao`, `limites_de_taxa`, `papel_app_menor_privilegio` | 6 | senha e `versao_token`; `limites_taxa` (UNLOGGED); papel `estuda_ai_app` |
+| `indice_sessoes_terminada_em` | 7 | `(usuario_id, terminada_em) INCLUDE (metodo)` parcial, para o LATERAL do analytics de foco |
+| `spotify` | 7 | `spotify_contas` (tokens cifrados na aplicação), `spotify_playlists` (`UNIQUE NULLS NOT DISTINCT`), `preferencias_foco` |
 | `sessoes_de_estudo` | 7 | `sessoes_estudo` (chave de idempotência, colunas geradas), `pausas_sessao`, `eventos_foco`, `VIEW vw_sessoes_foco` |
 
 > Dica de estudo: abra o `psql` e confira cada afirmação daqui.
@@ -63,6 +65,38 @@ erDiagram
     disciplinas |o--o{ sessoes_estudo : "SET NULL (disciplina_id)"
     sessoes_estudo ||--o{ pausas_sessao : "pausou (CASCADE)"
     sessoes_estudo ||--o{ eventos_foco : "registrou (CASCADE)"
+    usuarios ||--o| spotify_contas : "conectou (CASCADE, 1:1)"
+    usuarios ||--o{ spotify_playlists : "escolheu (CASCADE)"
+    disciplinas |o--o{ spotify_playlists : "da disciplina (CASCADE, FK composta)"
+    usuarios ||--o| preferencias_foco : "prefere (CASCADE, 1:1)"
+
+    spotify_contas {
+        bigint usuario_id PK,FK
+        text spotify_id
+        text nome
+        text escopos
+        bytea refresh_token "CIFRADO (AES-256-GCM); 1o byte = versão da chave"
+        bytea access_token "CIFRADO; nullable"
+        timestamptz access_expira_em "junto com access_token"
+        timestamptz conectado_em
+        timestamptz atualizado_em
+    }
+    spotify_playlists {
+        bigint id PK
+        bigint usuario_id FK
+        text alvo "padrao | metodo | disciplina | intervalo"
+        text metodo "só no alvo metodo"
+        bigint disciplina_id FK "só no alvo disciplina"
+        text uri "spotify:playlist:<22>"
+        text nome
+        timestamptz criado_em
+    }
+    preferencias_foco {
+        bigint usuario_id PK,FK
+        text spotify_no_intervalo "pausar | trocar | continuar"
+        timestamptz criado_em
+        timestamptz atualizado_em
+    }
 
     sessoes_estudo {
         bigint id PK
@@ -538,6 +572,30 @@ quando consegue (inclusive horas depois, se estava sem internet). Decisões:
 > andamento apareceria com "0 de foco efetivo". A view usa `CASE WHEN duracao_real_s IS NOT
 > NULL THEN GREATEST(...) END`, e `NULL` ("ainda não se sabe") é pulado por `AVG`/`SUM`.
 
+### `spotify_contas`, `spotify_playlists` e `preferencias_foco` (fase 7)
+
+- **Tokens cifrados na aplicação, não com pgcrypto.** Com `pgp_sym_encrypt(token, chave)` a chave
+  viaja dentro do comando SQL: aparece em log de consulta lenta, em `pg_stat_statements` e em
+  mensagens de erro, e passa pelo servidor do banco. Aqui a API cifra com AES-256-GCM
+  (`app/servicos/cifra.py`) e o Postgres só guarda `bytea` opaco. Um dump do banco sozinho não abre
+  nada. O AAD amarra cada valor ao usuário e ao campo (copiar o token de uma linha para outra faz a
+  decifragem falhar), e o 1º byte é a versão da chave: dá para girar a chave e contar no SQL o que
+  falta recifrar (`get_byte(refresh_token, 0)`). O `CHECK` confere o formato mínimo (versão + nonce
+  + tag), não o conteúdo.
+- **Access token guardado também** (com a validade), para os dois computadores usarem o mesmo
+  enquanto ele vale. A renovação usa `SELECT ... FOR UPDATE` na linha da conta: o Spotify pode
+  trocar o refresh token a cada renovação, e duas renovações simultâneas fariam uma invalidar a
+  outra (detalhes em `modo-foco.md`).
+- **`UNIQUE NULLS NOT DISTINCT`** em `spotify_playlists (usuario_id, alvo, metodo, disciplina_id)`.
+  Num `UNIQUE` comum, `NULL` nunca é igual a `NULL`: duas linhas `'padrao'` (as duas com `metodo` e
+  `disciplina_id` nulos) não colidiriam. `NULLS NOT DISTINCT` (Postgres 15+) compara os nulos como
+  iguais. Antes dele, a saída era um índice único de expressão sobre `coalesce(metodo, '')` e
+  `coalesce(disciplina_id, 0)`.
+- **"A coluna só existe no alvo dela"** com `CHECK ((alvo = 'metodo') = (metodo IS NOT NULL))`: a
+  igualdade de dois booleanos diz "um se e somente se o outro".
+- **Configuração separada da conexão:** desconectar apaga só `spotify_contas`; as playlists e a
+  preferência do intervalo continuam para a próxima conexão.
+
 ---
 
 ## 4. A desnormalização consciente: estado do SM-2
@@ -787,6 +845,8 @@ para tabelas em que o app não tem `DELETE`, porque rodam com os privilégios do
 | geração | `SET NULL` em `flashcards.geracao_id`/`questoes.geracao_id` | o conteúdo sobrevive à auditoria |
 | disciplina (em `sessoes_estudo`) | `SET NULL (disciplina_id)` | as horas estudadas sobrevivem e mantêm o dono |
 | sessão de estudo | `CASCADE` → pausas e eventos | são partes da sessão |
+| usuário | `CASCADE` → conta do Spotify, playlists, preferências | tudo é dele |
+| disciplina (em `spotify_playlists`) | `CASCADE` (FK composta) | a playlist daquela disciplina perde o sentido |
 
 Atualizar `materiais.disciplina_id` propaga para `trechos.disciplina_id`
 (`ON UPDATE CASCADE` da FK composta).

@@ -37,6 +37,10 @@ MIGRATION_DATABASE_URL=postgresql+psycopg://estuda_ai:${SENHA_DONO}@db:5432/estu
 JWT_SECRET=$(segredo)
 JWT_DIAS=30
 BFF_SEGREDO=$(segredo)
+# Cifra dos tokens do Spotify no banco (fase 7); a 1a chave é a atual
+CIFRA_CHAVES=1:$(openssl rand -base64 32)
+# Client ID do app do Spotify (público no PKCE): descomente e preencha
+# SPOTIFY_CLIENT_ID=
 
 MAX_UPLOAD_MB=20
 EMBEDDING_MODEL=intfloat/multilingual-e5-small

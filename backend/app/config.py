@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     # header é ignorado (senão qualquer um forjaria o IP e driblaria o limite de login).
     bff_segredo: SecretStr | None = Field(default=None, min_length=32)
 
+    # Spotify (fase 7). No fluxo PKCE o Client ID é PÚBLICO (vai na URL de autorização
+    # que o navegador abre) e não existe client secret. Sem ele, as rotas do Spotify
+    # respondem 503 "não configurado".
+    spotify_client_id: str | None = None
+    # Chaves que cifram os tokens do Spotify guardados no banco (app/servicos/cifra.py):
+    # "versão:base64 de 32 bytes", separadas por vírgula; a PRIMEIRA cifra o que é novo,
+    # as outras só decifram (rotação). Gere com: echo "1:$(openssl rand -base64 32)"
+    cifra_chaves: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

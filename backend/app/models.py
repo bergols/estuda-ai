@@ -29,6 +29,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     Numeric,
     SmallInteger,
@@ -782,5 +783,112 @@ class EventoFoco(Base):
         CheckConstraint("duracao_s >= 0", name="duracao_nao_negativa"),
         CheckConstraint(
             "detalhe IS NULL OR length(detalhe) BETWEEN 1 AND 200", name="detalhe_valido"
+        ),
+    )
+
+
+class SpotifyConta(Base):
+    """Conexão com o Spotify (1:1 com o usuário). Tokens em bytea CIFRADOS na aplicação
+    (app/servicos/cifra.py); o banco nunca vê o token em claro."""
+
+    __tablename__ = "spotify_contas"
+
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), primary_key=True
+    )
+    spotify_id: Mapped[str] = mapped_column(Text, nullable=False)
+    nome: Mapped[str | None] = mapped_column(Text)
+    escopos: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    access_token: Mapped[bytes | None] = mapped_column(LargeBinary)
+    access_expira_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    conectado_em: Mapped[datetime] = criado_em()
+    atualizado_em: Mapped[datetime] = atualizado_em()
+
+    __table_args__ = (
+        CheckConstraint(
+            "octet_length(refresh_token) > 29 AND get_byte(refresh_token, 0) BETWEEN 1 AND 255",
+            name="refresh_cifrado",
+        ),
+        CheckConstraint(
+            "access_token IS NULL OR octet_length(access_token) > 29", name="access_cifrado"
+        ),
+        CheckConstraint(
+            "(access_token IS NULL) = (access_expira_em IS NULL)", name="access_com_validade"
+        ),
+    )
+
+
+class SpotifyPlaylist(Base):
+    """Que playlist tocar: a da disciplina, senão a do método, senão a padrão; e a do
+    intervalo, quando a preferência é trocar de música na pausa."""
+
+    __tablename__ = "spotify_playlists"
+
+    id: Mapped[int] = pk()
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    alvo: Mapped[str] = mapped_column(Text, nullable=False)
+    metodo: Mapped[str | None] = mapped_column(Text)
+    disciplina_id: Mapped[int | None] = mapped_column(BigInteger)
+    uri: Mapped[str] = mapped_column(Text, nullable=False)
+    nome: Mapped[str] = mapped_column(Text, nullable=False)
+    criado_em: Mapped[datetime] = criado_em()
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["disciplina_id", "usuario_id"],
+            ["disciplinas.id", "disciplinas.usuario_id"],
+            ondelete="CASCADE",
+        ),
+        # NULLS NOT DISTINCT: sem isso, duas linhas 'padrao' (metodo e disciplina NULL)
+        # não colidiriam, porque no UNIQUE comum NULL é diferente de NULL
+        UniqueConstraint(
+            "usuario_id", "alvo", "metodo", "disciplina_id", postgresql_nulls_not_distinct=True
+        ),
+        CheckConstraint(
+            "alvo IN ('padrao', 'metodo', 'disciplina', 'intervalo')", name="alvo_valido"
+        ),
+        CheckConstraint(
+            "metodo IN ('pomodoro', 'bloco', '52_17', 'personalizado')", name="metodo_valido"
+        ),
+        CheckConstraint(
+            "(alvo = 'metodo') = (metodo IS NOT NULL)", name="metodo_so_no_alvo_metodo"
+        ),
+        CheckConstraint(
+            "(alvo = 'disciplina') = (disciplina_id IS NOT NULL)",
+            name="disciplina_so_no_alvo_disciplina",
+        ),
+        CheckConstraint(
+            "uri ~ '^spotify:(playlist|album|artist):[A-Za-z0-9]{22}$'", name="uri_valida"
+        ),
+        CheckConstraint("length(trim(nome)) BETWEEN 1 AND 200", name="nome_valido"),
+        Index(
+            "ix_spotify_playlists_disciplina_id",
+            "disciplina_id",
+            postgresql_where=text("disciplina_id IS NOT NULL"),
+        ),
+    )
+
+
+class PreferenciasFoco(Base):
+    """Preferências do modo foco (1:1 com o usuário)."""
+
+    __tablename__ = "preferencias_foco"
+
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), primary_key=True
+    )
+    spotify_no_intervalo: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="pausar"
+    )
+    criado_em: Mapped[datetime] = criado_em()
+    atualizado_em: Mapped[datetime] = atualizado_em()
+
+    __table_args__ = (
+        CheckConstraint(
+            "spotify_no_intervalo IN ('pausar', 'trocar', 'continuar')",
+            name="spotify_no_intervalo_valido",
         ),
     )

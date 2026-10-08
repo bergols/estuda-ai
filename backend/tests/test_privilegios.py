@@ -39,6 +39,11 @@ ESPERADO = {
     "pausas_sessao": {"SELECT", "INSERT"},
     "eventos_foco": {"SELECT", "INSERT"},
     "vw_sessoes_foco": {"SELECT"},
+    # Spotify: desconectar apaga a conta; as playlists são configuração (DML completo);
+    # preferências nunca são apagadas pelo app (só com o usuário, em cascata)
+    "spotify_contas": DML,
+    "spotify_playlists": DML,
+    "preferencias_foco": {"SELECT", "INSERT", "UPDATE"},
     "vw_respostas": {"SELECT"},
     "mv_respostas_diarias": {"SELECT"},
     "atualizacoes_mv": {"SELECT"},
