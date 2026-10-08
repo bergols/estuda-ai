@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "principal",
+  "description": "O que a janela principal (as telas do frontend, servidas de dentro do app) pode chamar.",
+  "windows": ["principal"],
+  "permissions": [
+    "core:default",
+    "allow-chamar-api",
+    "allow-entrar",
+    "allow-sair"
+  ]
+}

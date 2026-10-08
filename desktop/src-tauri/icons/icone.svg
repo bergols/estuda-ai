@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Folha de caderno: papel, pautas finas, margem vinho e o "e" em serifa -->
+  <rect x="64" y="64" width="896" height="896" rx="196" fill="#faf8f4"/>
+  <rect x="64" y="64" width="896" height="896" rx="196" fill="none" stroke="#d8d2c6" stroke-width="12"/>
+  <g stroke="#d8d2c6" stroke-width="10">
+    <line x1="140" y1="330" x2="884" y2="330"/>
+    <line x1="140" y1="450" x2="884" y2="450"/>
+    <line x1="140" y1="570" x2="884" y2="570"/>
+    <line x1="140" y1="690" x2="884" y2="690"/>
+    <line x1="140" y1="810" x2="884" y2="810"/>
+  </g>
+  <line x1="290" y1="110" x2="290" y2="914" stroke="#8c2f27" stroke-width="14"/>
+  <text x="590" y="760" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif"
+        font-size="600" font-style="italic" fill="#1c1c1a">e</text>
+</svg>

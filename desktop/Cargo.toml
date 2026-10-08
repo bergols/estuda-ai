@@ -1,0 +1,21 @@
+# Workspace do app desktop (Tauri v2).
+#
+# - nucleo/: regras puras, sem Tauri nem sistema de janelas (URL da API, caminhos
+#   permitidos; depois: arquivo hosts, sincronização). Os testes rodam em segundos em
+#   qualquer sistema, inclusive no Linux do CI, sem instalar WebKit.
+# - src-tauri/: o app (janela, comandos chamados pelo frontend, cofre do sistema).
+[workspace]
+members = ["nucleo", "src-tauri"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+
+[profile.release]
+# Instalador menor: o app é pequeno e não precisa de símbolos de depuração
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "estuda-ai",
+  "version": "0.1.0",
+  "identifier": "io.github.bergols.estudaai",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../frontend run dev:desktop",
+    "devUrl": "http://localhost:3001",
+    "beforeBuildCommand": "npm --prefix ../frontend run build:desktop",
+    "frontendDist": "../../frontend/out"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "principal",
+        "title": "estuda-ai",
+        "width": 1100,
+        "height": 820,
+        "minWidth": 380,
+        "minHeight": 560
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob:",
+        "font-src": "'self' data:",
+        "connect-src": "ipc: http://ipc.localhost",
+        "object-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'none'",
+        "frame-ancestors": "'none'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg", "msi", "nsis"],
+    "category": "Education",
+    "shortDescription": "Assistente de estudos",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "nsis": { "installMode": "currentUser" }
+    }
+  }
+}

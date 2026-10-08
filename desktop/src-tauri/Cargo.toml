@@ -1,0 +1,28 @@
+[package]
+name = "estuda-ai"
+version = "0.1.0"
+description = "estuda-ai: app desktop (Windows e macOS)"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+# Nome da biblioteca diferente do binário (exigência do Tauri v2 por causa do Windows)
+name = "estuda_ai_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+nucleo = { path = "../nucleo" }
+tauri = { version = "2.12", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.13", features = ["json"] }
+# Cofre do sistema: Keychain (macOS), Gerenciador de Credenciais (Windows)
+keyring = "4"
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
