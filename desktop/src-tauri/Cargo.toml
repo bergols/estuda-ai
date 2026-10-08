@@ -1,6 +1,6 @@
 [package]
 name = "estuda-ai"
-version = "0.2.0"
+version = "0.3.0"
 description = "estuda-ai: app desktop (Windows e macOS)"
 edition.workspace = true
 license.workspace = true
