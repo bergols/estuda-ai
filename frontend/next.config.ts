@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Produção em Docker: um servidor Node mínimo (.next/standalone/server.js), só com
+  // os arquivos de node_modules que o build realmente usa.
+  output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

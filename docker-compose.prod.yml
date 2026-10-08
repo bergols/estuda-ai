@@ -1,0 +1,93 @@
+# Produção (uma VM): Caddy -> Next (BFF) -> API -> Postgres.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Lê o .env DESTA pasta no servidor (gerado por deploy/gerar-env.sh, fora do git).
+# Diferenças do docker-compose.yml de desenvolvimento:
+# - só o Caddy publica portas (80/443); API e banco não ficam expostos na internet;
+# - três redes, cada serviço só na que precisa (menor privilégio também na rede):
+#     dados  (interna, sem saída): db <-> backend
+#     app:                          backend <-> frontend (e saída para a Anthropic/HF)
+#     borda:                        frontend <-> caddy
+# - backend sem --reload, sem código montado, sem ferramentas de dev, como usuário
+#   sem privilégios; o frontend só recebe as duas variáveis de que precisa;
+# - restart: unless-stopped (volta sozinho depois de um reboot da VM).
+
+name: estuda-ai-prod
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    shm_size: 1gb # CREATE INDEX paralelo (HNSW)
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [dados]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        UV_SYNC_ARGS: --no-dev
+    restart: unless-stopped
+    user: "10001:10001"
+    env_file: .env
+    environment:
+      HF_HOME: /modelos
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
+      - modelos:/modelos
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [dados, app]
+    # Sem "ports": a API só é alcançada pelo Next, dentro da rede "app".
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    # Só o que o BFF usa. Nada de env_file: o frontend não precisa (nem deve ver) as
+    # senhas do banco nem o JWT_SECRET.
+    environment:
+      BACKEND_URL: http://backend:8000
+      BFF_SEGREDO: ${BFF_SEGREDO}
+    depends_on: [backend]
+    networks: [app, borda]
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "${PORTA_HTTP:-80}:80"
+      - "${PORTA_HTTPS:-443}:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_dados:/data # certificados (guardar: o Let's Encrypt limita emissões)
+      - caddy_config:/config
+    depends_on: [frontend]
+    networks: [borda]
+
+networks:
+  dados:
+    internal: true # o banco não fala com a internet, nem para sair
+  app:
+  borda:
+
+volumes:
+  pgdata:
+  uploads:
+  modelos:
+  caddy_dados:
+  caddy_config:

@@ -14,8 +14,17 @@ WORKDIR /app
 # Copia só os manifestos primeiro: a camada de dependências fica em cache
 # e só é refeita quando pyproject.toml/uv.lock mudam.
 COPY pyproject.toml uv.lock ./
-# --no-cache: o cache do uv (downloads) não fica gravado na camada da imagem
-RUN uv sync --frozen --no-install-project --no-cache
+# --no-cache: o cache do uv (downloads) não fica gravado na camada da imagem.
+# Produção passa UV_SYNC_ARGS=--no-dev (sem pytest/ruff na imagem).
+ARG UV_SYNC_ARGS=""
+RUN uv sync --frozen --no-install-project --no-cache ${UV_SYNC_ARGS}
+
+# Usuário sem privilégios para a produção (o compose de produção roda com
+# "user: 10001"). As pastas dos volumes já nascem dele: um volume novo copia o dono
+# da pasta da imagem. O desenvolvimento continua como root (volumes antigos são do root).
+RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /data/uploads /modelos \
+    && chown app:app /data/uploads /modelos
 
 COPY . .
 
