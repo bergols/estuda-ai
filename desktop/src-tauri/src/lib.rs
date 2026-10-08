@@ -2,6 +2,7 @@
 //! estáticos (frontend/out); este lado cuida do que uma página não pode fazer sozinha.
 
 mod cofre;
+mod janela;
 mod ponte;
 mod sincronia;
 
@@ -27,6 +28,8 @@ pub fn run() {
             sincronia::sessao_em_andamento,
             sincronia::situacao_sincronia,
             sincronia::sincronizar_agora,
+            janela::modo_foco,
+            janela::sistema,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o estuda-ai");

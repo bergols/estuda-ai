@@ -11,6 +11,8 @@ const COMANDOS: &[&str] = &[
     "sessao_em_andamento",
     "situacao_sincronia",
     "sincronizar_agora",
+    "modo_foco",
+    "sistema",
 ];
 
 fn main() {

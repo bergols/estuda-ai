@@ -295,7 +295,7 @@ mod testes {
     /// e banco de desenvolvimento) e o cofre DE VERDADE do sistema. Fica fora da
     /// execução padrão (precisa da pilha local e mexe no Keychain):
     ///
-    ///   ESTUDA_AI_TESTE_SENHA=... cargo test -p estuda-ai -- --ignored
+    ///   ESTUDA_AI_TESTE_SENHA=... cargo test -p estuda-ai -- --ignored --test-threads=1
     #[tokio::test]
     #[ignore]
     async fn login_cofre_chamada_e_saida() {

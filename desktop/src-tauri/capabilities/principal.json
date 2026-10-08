@@ -11,6 +11,8 @@
     "allow-salvar-sessao",
     "allow-sessao-em-andamento",
     "allow-situacao-sincronia",
-    "allow-sincronizar-agora"
+    "allow-sincronizar-agora",
+    "allow-modo-foco",
+    "allow-sistema"
   ]
 }

@@ -33,11 +33,15 @@ impl Sincronia {
         let pasta = app.path().app_data_dir().map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&pasta).map_err(|e| e.to_string())?;
         let fila = Fila::abrir(&pasta.join("estuda-ai.db")).map_err(|e| e.to_string())?;
-        Ok(Self {
+        Ok(Self::com(fila))
+    }
+
+    fn com(fila: Fila) -> Self {
+        Self {
             fila: Mutex::new(fila),
             enviando: tokio::sync::Mutex::new(()),
             acordar: tokio::sync::Notify::new(),
-        })
+        }
     }
 
     fn fila(&self) -> std::sync::MutexGuard<'_, Fila> {
@@ -81,6 +85,16 @@ pub fn iniciar(app: AppHandle) {
 async fn sincronizar(app: &AppHandle) {
     let sincronia = app.state::<Sincronia>();
     let estado = app.state::<Estado>();
+    let erro = enviar_pendentes(&sincronia, &estado).await;
+    if let Ok(situacao) = sincronia.fila().situacao(&estado.origem()) {
+        let _ = app.emit("sincronia", EstadoSincronia { situacao, erro });
+    }
+}
+
+/// Manda tudo o que está pendente, em lotes, e registra a resposta de cada sessão.
+/// Devolve o erro que interrompeu o envio (sem rede, sem login...), se houver; o que
+/// não foi confirmado continua na fila. Separado do laço para ser testado sem janela.
+async fn enviar_pendentes(sincronia: &Sincronia, estado: &Estado) -> Option<String> {
     let _vez = sincronia.enviando.lock().await;
     let origem = estado.origem();
 
@@ -101,7 +115,7 @@ async fn sincronizar(app: &AppHandle) {
             "sessoes": pendentes.iter().map(|p| p.dados.clone()).collect::<Vec<Value>>()
         });
         let resposta = match ponte::chamar(
-            &estado,
+            estado,
             "POST",
             "sessoes/sincronizar",
             Some("application/json".into()),
@@ -125,6 +139,7 @@ async fn sincronizar(app: &AppHandle) {
                     break;
                 };
                 let fila = sincronia.fila();
+                let mut confirmadas = 0;
                 for item in resultado.sessoes {
                     let Some(enviada) = pendentes.iter().find(|p| p.chave == item.chave) else {
                         continue;
@@ -134,12 +149,14 @@ async fn sincronizar(app: &AppHandle) {
                     } else {
                         Veredito::Aceita
                     };
-                    if let Err(e) = fila.confirmar(&enviada.chave, enviada.versao, &veredito) {
-                        erro = Some(format!("fila local: {e}"));
+                    match fila.confirmar(&enviada.chave, enviada.versao, &veredito) {
+                        Ok(()) => confirmadas += 1,
+                        Err(e) => erro = Some(format!("fila local: {e}")),
                     }
                 }
-                if pendentes.len() < LOTE {
-                    break; // era o último lote
+                // Último lote, ou nenhum progresso (evita repetir o mesmo lote em laço)
+                if pendentes.len() < LOTE || confirmadas == 0 {
+                    break;
                 }
             }
             // Formato recusado pela API (bug do app, não falta de rede): reenviar não
@@ -168,9 +185,7 @@ async fn sincronizar(app: &AppHandle) {
         }
     }
 
-    if let Ok(situacao) = sincronia.fila().situacao(&origem) {
-        let _ = app.emit("sincronia", EstadoSincronia { situacao, erro });
-    }
+    erro
 }
 
 // ------------------------------------------------------------------- comandos
@@ -223,4 +238,114 @@ pub fn situacao_sincronia(
 #[tauri::command]
 pub fn sincronizar_agora(sincronia: State<'_, Sincronia>) {
     sincronia.acordar.notify_one();
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+    use serde_json::json;
+
+    fn chave() -> String {
+        uuid::Uuid::new_v4().to_string()
+    }
+
+    /// Sessão no formato da API, com um evento (de chave fixa) de saída da janela.
+    fn sessao(chave: &str, evento: &str, status: &str) -> Value {
+        let terminada = if status == "em_andamento" {
+            Value::Null
+        } else {
+            json!("2026-10-08T13:25:00Z")
+        };
+        json!({
+            "chave": chave, "metodo": "pomodoro", "foco_min": 25, "pausa_min": 5, "ciclos": 1,
+            "sistema": "macos", "status": status, "iniciada_em": "2026-10-08T13:00:00Z",
+            "terminada_em": terminada, "pausas": [],
+            "eventos": [{ "chave": evento, "tipo": "saida_janela",
+                          "ocorrido_em": "2026-10-08T13:05:00Z", "duracao_s": 40 }]
+        })
+    }
+
+    /// Sem servidor (porta 9 do localhost recusa na hora): nada se perde, tudo fica na fila.
+    #[tokio::test]
+    async fn sem_servidor_a_fila_guarda_tudo() {
+        let estado = Estado::com_endereco("http://127.0.0.1:9").unwrap();
+        let sincronia = Sincronia::com(Fila::em_memoria().unwrap());
+        let c = chave();
+        sincronia
+            .fila()
+            .salvar(
+                &estado.origem(),
+                &c,
+                &sessao(&c, &chave(), "concluida"),
+                None,
+            )
+            .unwrap();
+        // sem token no cofre para este servidor: o envio para antes da rede
+        assert!(enviar_pendentes(&sincronia, &estado).await.is_some());
+        assert_eq!(
+            sincronia
+                .fila()
+                .situacao(&estado.origem())
+                .unwrap()
+                .pendentes,
+            1
+        );
+    }
+
+    /// De ponta a ponta: SQLite → BFF local → API → Postgres, com o Keychain de verdade.
+    /// Os testes ignorados usam o MESMO item do cofre (o do localhost): rode em série.
+    ///   ESTUDA_AI_TESTE_SENHA=... cargo test -p estuda-ai -- --ignored --test-threads=1
+    #[tokio::test]
+    #[ignore]
+    async fn sqlite_ate_o_postgres_sem_duplicar() {
+        let senha = std::env::var("ESTUDA_AI_TESTE_SENHA").expect("defina ESTUDA_AI_TESTE_SENHA");
+        let estado = Estado::com_endereco("http://localhost:3000").unwrap();
+        let r = ponte::entrar_com(&estado, "estudante@estuda-ai.local", &senha)
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 204);
+
+        let sincronia = Sincronia::com(Fila::em_memoria().unwrap());
+        let origem = estado.origem();
+        let fila = || sincronia.fila();
+        let (a, ea, b, eb) = (chave(), chave(), chave(), chave());
+        fila()
+            .salvar(&origem, &a, &sessao(&a, &ea, "em_andamento"), None)
+            .unwrap();
+        fila()
+            .salvar(&origem, &b, &sessao(&b, &eb, "concluida"), None)
+            .unwrap();
+
+        assert_eq!(enviar_pendentes(&sincronia, &estado).await, None);
+        assert_eq!(fila().situacao(&origem).unwrap().pendentes, 0);
+
+        // A sessão "a" termina: só ela volta à fila e sobe de novo
+        fila()
+            .salvar(&origem, &a, &sessao(&a, &ea, "concluida"), None)
+            .unwrap();
+        assert_eq!(fila().pendentes(&origem, 50).unwrap().len(), 1);
+        assert_eq!(enviar_pendentes(&sincronia, &estado).await, None);
+
+        // Reenvio de tudo (como se as confirmações tivessem se perdido): o servidor
+        // responde "sem_mudanca" e nenhum evento é gravado de novo
+        let lote =
+            json!({ "sessoes": [sessao(&a, &ea, "concluida"), sessao(&b, &eb, "concluida")] });
+        let r = ponte::chamar(
+            &estado,
+            "POST",
+            "sessoes/sincronizar",
+            Some("application/json".into()),
+            lote.to_string().into_bytes(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.status(), 200, "{}", r.corpo());
+        let corpo: Value = serde_json::from_str(r.corpo()).unwrap();
+        for item in corpo["sessoes"].as_array().unwrap() {
+            assert_eq!(item["resultado"], "sem_mudanca");
+            assert_eq!(item["eventos_novos"], 0);
+        }
+
+        ponte::sair_de(&estado).unwrap();
+    }
 }
