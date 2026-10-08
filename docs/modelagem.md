@@ -29,6 +29,8 @@ Histórico de migrations:
 | `funcao_sm2_plpgsql` | 4 | função `sm2()` em PL/pgSQL (experimento) |
 | `views_de_analytics` | 5 | `VIEW vw_respostas`, `MATERIALIZED VIEW mv_respostas_diarias` (+ índice único), tabela `atualizacoes_mv` |
 | `historico_revisoes_indice_include_nota` | 5 | índice do histórico com `INCLUDE (nota)`, trocado com `CREATE INDEX CONCURRENTLY` |
+| `autenticacao`, `limites_de_taxa`, `papel_app_menor_privilegio` | 6 | senha e `versao_token`; `limites_taxa` (UNLOGGED); papel `estuda_ai_app` |
+| `sessoes_de_estudo` | 7 | `sessoes_estudo` (chave de idempotência, colunas geradas), `pausas_sessao`, `eventos_foco`, `VIEW vw_sessoes_foco` |
 
 > Dica de estudo: abra o `psql` e confira cada afirmação daqui.
 > `docker compose exec db psql -U estuda_ai -d estuda_ai` e depois `\d+ flashcards`.
@@ -57,6 +59,52 @@ erDiagram
     disciplinas |o--o{ geracoes : "SET NULL (disciplina_id)"
     geracoes |o--o{ flashcards : "criou (SET NULL)"
     geracoes |o--o{ questoes : "criou (SET NULL)"
+    usuarios ||--o{ sessoes_estudo : "estudou (CASCADE)"
+    disciplinas |o--o{ sessoes_estudo : "SET NULL (disciplina_id)"
+    sessoes_estudo ||--o{ pausas_sessao : "pausou (CASCADE)"
+    sessoes_estudo ||--o{ eventos_foco : "registrou (CASCADE)"
+
+    sessoes_estudo {
+        bigint id PK
+        bigint usuario_id FK
+        bigint disciplina_id FK "nullable; FK composta com usuario_id"
+        uuid chave "idempotência; UNIQUE (usuario_id, chave)"
+        text metodo "pomodoro | bloco | 52_17 | personalizado"
+        smallint foco_min
+        smallint pausa_min
+        smallint ciclos
+        smallint pausa_longa_min "nullable"
+        smallint ciclos_ate_pausa_longa "nullable"
+        text meta "nullable"
+        text sistema "windows | macos | linux | web"
+        text status "em_andamento | concluida | abandonada"
+        timestamptz iniciada_em "relógio do app"
+        timestamptz terminada_em "NULL em andamento"
+        int duracao_planejada_s "GERADA: foco_min*60*ciclos"
+        int duracao_real_s "GERADA: fim - início"
+        timestamptz criado_em
+        timestamptz atualizado_em
+    }
+    pausas_sessao {
+        bigint id PK
+        bigint sessao_id FK
+        uuid chave "UNIQUE (sessao_id, chave)"
+        text tipo "curta | longa | manual"
+        timestamptz iniciada_em
+        timestamptz terminada_em
+        int duracao_s "GERADA"
+        timestamptz recebido_em "relógio do servidor"
+    }
+    eventos_foco {
+        bigint id PK
+        bigint sessao_id FK
+        uuid chave "UNIQUE (sessao_id, chave)"
+        text tipo "saida_janela | programa_bloqueado | site_bloqueado | saida_emergencia"
+        timestamptz ocorrido_em "relógio do app"
+        int duracao_s "só na saída da janela"
+        text detalhe "programa ou site"
+        timestamptz recebido_em "relógio do servidor"
+    }
 
     usuarios {
         bigint id PK
@@ -452,6 +500,44 @@ em `seguranca.md`, seção 5. Três decisões de modelagem:
 - Índice em `janela_inicio` para a limpeza (`DELETE ... WHERE janela_inicio < now() -
   interval '1 day'`), que roda na primeira contagem de cada janela nova.
 
+### `sessoes_estudo`, `pausas_sessao` e `eventos_foco` (fase 7)
+
+Sessões de estudo do app desktop. O app grava tudo num SQLite local e manda ao servidor
+quando consegue (inclusive horas depois, se estava sem internet). Decisões:
+
+- **Chave de idempotência (`chave uuid`) gerada no app.** Se a resposta de um envio se perde,
+  o app não sabe se o servidor gravou e manda de novo. Com `UNIQUE (usuario_id, chave)` e
+  `INSERT ... ON CONFLICT`, o reenvio não duplica nada. Não dá para usar o `id` do banco
+  (ele só existe depois do envio que talvez tenha falhado) nem `(usuario_id, iniciada_em)`
+  (dois computadores podem começar no mesmo segundo, e o relógio pode ser corrigido entre
+  um envio e outro). Pausas e eventos têm `UNIQUE (sessao_id, chave)`. Detalhes do fluxo em
+  `modo-foco.md`.
+- **Tempos do método em colunas, não em `jsonb`.** São poucos e conhecidos, e precisam de
+  `CHECK`: `metodo <> '52_17' OR (foco_min = 52 AND pausa_min = 17)`; bloco contínuo = um
+  ciclo sem pausa; a pausa longa tem as duas colunas ou nenhuma. `jsonb` é para estrutura
+  realmente aberta, e aqui perderia as regras.
+- **Colunas geradas (`GENERATED ALWAYS AS (...) STORED`):** `duracao_planejada_s`
+  (`foco_min * 60 * ciclos`) e `duracao_real_s` (fim − início, `NULL` em andamento). O banco
+  calcula a partir das outras colunas, e um `UPDATE` direto nelas é recusado ("cannot update
+  a generated column"). É a forma mais forte de "não guardar dado que pode divergir".
+- **O foco efetivo não é coluna.** Ele é real − pausas − tempo fora da janela, e depende
+  de linhas de outras tabelas: coluna gerada só enxerga a própria linha. Fica na view
+  `vw_sessoes_foco`, com duas subconsultas `LATERAL` (uma soma as pausas da sessão,
+  outra os eventos).
+- **Pausas e eventos só-INSERT** (privilégios `SELECT, INSERT`), como `historico_revisoes`:
+  chegam completos (a pausa só é enviada quando termina) e não mudam mais. A sessão em si
+  tem `UPDATE` (status), mas não `DELETE`.
+- **FK composta `(disciplina_id, usuario_id)`** com `SET NULL (disciplina_id)`, como em
+  `geracoes`: o banco impede ligar uma sessão à disciplina de outra pessoa, e apagar a
+  disciplina mantém as horas estudadas no histórico.
+- **Dois relógios.** `iniciada_em`/`ocorrido_em` vêm do computador (é quando aconteceu);
+  `recebido_em`/`criado_em`, do servidor. A diferença mostra o atraso da sincronização.
+
+> Pegadinha encontrada pelo teste da view: no Postgres, `GREATEST` e `LEAST` **ignoram NULL**
+> (`GREATEST(NULL, 0)` = `0`; no padrão SQL e em outros bancos daria `NULL`). Uma sessão em
+> andamento apareceria com "0 de foco efetivo". A view usa `CASE WHEN duracao_real_s IS NOT
+> NULL THEN GREATEST(...) END`, e `NULL` ("ainda não se sabe") é pulado por `AVG`/`SUM`.
+
 ---
 
 ## 4. A desnormalização consciente: estado do SM-2
@@ -666,6 +752,8 @@ sem ser chave. Consultas que só precisam dessas três colunas são respondidas 
 
 - `vw_respostas` (**VIEW**): revisões e tentativas num formato só, com o dia no fuso do usuário.
   Não guarda dados.
+- `vw_sessoes_foco` (**VIEW**, fase 7): uma linha por sessão com dia local, pausas, tempo fora
+  da janela, interrupções e foco efetivo.
 - `mv_respostas_diarias` (**MATERIALIZED VIEW**): respostas e acertos por
   usuário/disciplina/dia/fonte, gravados em disco; atualizada por `REFRESH ... CONCURRENTLY`. O
   horário do último refresh fica em `atualizacoes_mv`.
@@ -697,6 +785,8 @@ para tabelas em que o app não tem `DELETE`, porque rodam com os privilégios do
 | alternativa | `NO ACTION` se já foi escolhida numa tentativa | preserva o histórico; apagar a questão inteira funciona |
 | disciplina (em `geracoes`) | `SET NULL (disciplina_id)` | a auditoria do gasto sobrevive e mantém o dono |
 | geração | `SET NULL` em `flashcards.geracao_id`/`questoes.geracao_id` | o conteúdo sobrevive à auditoria |
+| disciplina (em `sessoes_estudo`) | `SET NULL (disciplina_id)` | as horas estudadas sobrevivem e mantêm o dono |
+| sessão de estudo | `CASCADE` → pausas e eventos | são partes da sessão |
 
 Atualizar `materiais.disciplina_id` propaga para `trechos.disciplina_id`
 (`ON UPDATE CASCADE` da FK composta).

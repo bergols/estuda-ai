@@ -33,6 +33,12 @@ ESPERADO = {
     "historico_revisoes": {"SELECT", "INSERT"},
     "tentativas": {"SELECT", "INSERT"},
     "geracoes": {"SELECT", "INSERT"},
+    # Fase 7: a sessão muda de status (UPDATE), mas o app nunca apaga uma; pausas e
+    # eventos chegam completos e não mudam mais (como o histórico de revisões)
+    "sessoes_estudo": {"SELECT", "INSERT", "UPDATE"},
+    "pausas_sessao": {"SELECT", "INSERT"},
+    "eventos_foco": {"SELECT", "INSERT"},
+    "vw_sessoes_foco": {"SELECT"},
     "vw_respostas": {"SELECT"},
     "mv_respostas_diarias": {"SELECT"},
     "atualizacoes_mv": {"SELECT"},

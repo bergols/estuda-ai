@@ -13,6 +13,7 @@ Decisões explicadas em docs/modelagem.md. Resumo das convenções:
 
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -34,6 +35,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    Uuid,
     func,
     text,
 )
@@ -50,6 +52,13 @@ EMBEDDING_DIM = 384
 CONFIG_TEXTO = "portugues_unaccent"
 
 STATUS_MATERIAL = ("pendente", "processando", "concluido", "erro")
+
+# Fase 7: sessões de estudo do app desktop
+METODOS_SESSAO = ("pomodoro", "bloco", "52_17", "personalizado")
+STATUS_SESSAO = ("em_andamento", "concluida", "abandonada")
+SISTEMAS = ("windows", "macos", "linux", "web")
+TIPOS_PAUSA = ("curta", "longa", "manual")
+TIPOS_EVENTO_FOCO = ("saida_janela", "programa_bloqueado", "site_bloqueado", "saida_emergencia")
 
 # Nomes previsíveis para constraints. Sem isso o Postgres inventa nomes
 # (ex.: disciplinas_usuario_id_fkey) e o Alembic não consegue apagá-las depois
@@ -622,4 +631,148 @@ class LimiteTaxa(Base):
         CheckConstraint("contagem > 0", name="contagem_positiva"),
         Index("ix_limites_taxa_janela_inicio", "janela_inicio"),
         {"prefixes": ["UNLOGGED"]},
+    )
+
+
+def _duracao(inicio: str, fim: str) -> Computed:
+    """Segundos entre duas colunas timestamptz, calculados e guardados pelo banco."""
+    return Computed(f"(extract(epoch FROM {fim} - {inicio}))::integer", persisted=True)
+
+
+class SessaoEstudo(Base):
+    """Uma sessão de estudo (fase 7). Mutável: o status vai de em_andamento a
+    concluida/abandonada. A `chave` é a de idempotência, gerada pelo app desktop
+    (ver a migration "sessoes_de_estudo" e docs/modo-foco.md)."""
+
+    __tablename__ = "sessoes_estudo"
+
+    id: Mapped[int] = pk()
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    disciplina_id: Mapped[int | None] = mapped_column(BigInteger)
+    chave: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    metodo: Mapped[str] = mapped_column(Text, nullable=False)
+    foco_min: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    pausa_min: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    ciclos: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    pausa_longa_min: Mapped[int | None] = mapped_column(SmallInteger)
+    ciclos_ate_pausa_longa: Mapped[int | None] = mapped_column(SmallInteger)
+    meta: Mapped[str | None] = mapped_column(Text)
+    sistema: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    iniciada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    terminada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Colunas geradas: o banco calcula; o ORM nunca as escreve
+    duracao_planejada_s: Mapped[int] = mapped_column(
+        Integer, Computed("foco_min * 60 * ciclos", persisted=True)
+    )
+    duracao_real_s: Mapped[int | None] = mapped_column(
+        Integer, _duracao("iniciada_em", "terminada_em")
+    )
+    criado_em: Mapped[datetime] = criado_em()
+    atualizado_em: Mapped[datetime] = atualizado_em()
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["disciplina_id", "usuario_id"],
+            ["disciplinas.id", "disciplinas.usuario_id"],
+            ondelete="SET NULL (disciplina_id)",
+        ),
+        UniqueConstraint("usuario_id", "chave"),
+        CheckConstraint(
+            "metodo IN ('pomodoro', 'bloco', '52_17', 'personalizado')", name="metodo_valido"
+        ),
+        CheckConstraint("foco_min BETWEEN 1 AND 240", name="foco_min_valido"),
+        CheckConstraint("pausa_min BETWEEN 0 AND 60", name="pausa_min_valida"),
+        CheckConstraint("ciclos BETWEEN 1 AND 12", name="ciclos_validos"),
+        CheckConstraint("pausa_longa_min BETWEEN 1 AND 90", name="pausa_longa_valida"),
+        CheckConstraint(
+            "ciclos_ate_pausa_longa BETWEEN 2 AND 12", name="ciclos_ate_pausa_longa_validos"
+        ),
+        CheckConstraint(
+            "(pausa_longa_min IS NULL) = (ciclos_ate_pausa_longa IS NULL)",
+            name="pausa_longa_completa",
+        ),
+        CheckConstraint(
+            "metodo <> '52_17' OR (foco_min = 52 AND pausa_min = 17)", name="metodo_52_17"
+        ),
+        CheckConstraint(
+            "metodo <> 'bloco' OR (pausa_min = 0 AND ciclos = 1 AND pausa_longa_min IS NULL)",
+            name="metodo_bloco",
+        ),
+        CheckConstraint(
+            "meta IS NULL OR length(trim(meta)) BETWEEN 1 AND 200", name="meta_valida"
+        ),
+        CheckConstraint(
+            "sistema IN ('windows', 'macos', 'linux', 'web')", name="sistema_valido"
+        ),
+        CheckConstraint(
+            "status IN ('em_andamento', 'concluida', 'abandonada')", name="status_valido"
+        ),
+        CheckConstraint(
+            "(status = 'em_andamento') = (terminada_em IS NULL)", name="fim_conforme_status"
+        ),
+        CheckConstraint("terminada_em >= iniciada_em", name="fim_apos_inicio"),
+        Index("ix_sessoes_estudo_usuario_iniciada_em", "usuario_id", "iniciada_em"),
+        Index(
+            "ix_sessoes_estudo_disciplina_id",
+            "disciplina_id",
+            postgresql_where=text("disciplina_id IS NOT NULL"),
+        ),
+    )
+
+
+class PausaSessao(Base):
+    """Pausa completa de uma sessão (só INSERT: enviada quando termina)."""
+
+    __tablename__ = "pausas_sessao"
+
+    id: Mapped[int] = pk()
+    sessao_id: Mapped[int] = mapped_column(
+        ForeignKey("sessoes_estudo.id", ondelete="CASCADE"), nullable=False
+    )
+    chave: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    tipo: Mapped[str] = mapped_column(Text, nullable=False)
+    iniciada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    terminada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duracao_s: Mapped[int] = mapped_column(Integer, _duracao("iniciada_em", "terminada_em"))
+    recebido_em: Mapped[datetime] = criado_em()
+
+    __table_args__ = (
+        UniqueConstraint("sessao_id", "chave"),
+        CheckConstraint("tipo IN ('curta', 'longa', 'manual')", name="tipo_valido"),
+        CheckConstraint("terminada_em >= iniciada_em", name="fim_apos_inicio"),
+    )
+
+
+class EventoFoco(Base):
+    """Evento de foco durante uma sessão (só INSERT)."""
+
+    __tablename__ = "eventos_foco"
+
+    id: Mapped[int] = pk()
+    sessao_id: Mapped[int] = mapped_column(
+        ForeignKey("sessoes_estudo.id", ondelete="CASCADE"), nullable=False
+    )
+    chave: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    tipo: Mapped[str] = mapped_column(Text, nullable=False)
+    ocorrido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duracao_s: Mapped[int | None] = mapped_column(Integer)
+    detalhe: Mapped[str | None] = mapped_column(Text)
+    recebido_em: Mapped[datetime] = criado_em()
+
+    __table_args__ = (
+        UniqueConstraint("sessao_id", "chave"),
+        CheckConstraint(
+            "tipo IN ('saida_janela', 'programa_bloqueado', 'site_bloqueado', 'saida_emergencia')",
+            name="tipo_valido",
+        ),
+        CheckConstraint(
+            "(tipo = 'saida_janela') = (duracao_s IS NOT NULL)", name="duracao_so_na_saida"
+        ),
+        CheckConstraint("duracao_s >= 0", name="duracao_nao_negativa"),
+        CheckConstraint(
+            "detalhe IS NULL OR length(detalhe) BETWEEN 1 AND 200", name="detalhe_valido"
+        ),
     )
