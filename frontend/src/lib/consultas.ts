@@ -267,6 +267,24 @@ export function useCustos(d?: number) {
   return useQuery({ queryKey: chaves.analytics("custos", d), queryFn: () => dados(api.GET("/analytics/custos", filtro(d))), ...comum });
 }
 
+// Foco (fase 7): lidos ao vivo da vw_sessoes_foco
+export function useFocoHoras(agrupar: "dia" | "semana", d?: number) {
+  return useQuery({
+    queryKey: [...chaves.analytics(`foco-horas-${agrupar}`, d)],
+    queryFn: () => dados(api.GET("/analytics/foco/horas", { params: { query: { disciplina_id: d, agrupar } } })),
+    ...comum,
+  });
+}
+export function useFocoSessoes(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("foco-sessoes", d), queryFn: () => dados(api.GET("/analytics/foco/sessoes", filtro(d))), ...comum });
+}
+export function useFocoInterrupcoes(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("foco-interrupcoes", d), queryFn: () => dados(api.GET("/analytics/foco/interrupcoes", filtro(d))), ...comum });
+}
+export function useAcertoPosSessao(d?: number) {
+  return useQuery({ queryKey: chaves.analytics("foco-acerto", d), queryFn: () => dados(api.GET("/analytics/foco/acerto-pos-sessao", filtro(d))), ...comum });
+}
+
 /** REFRESH da materialized view (pela função SECURITY DEFINER na API). */
 export function useAtualizarAnalytics() {
   const cliente = useQueryClient();

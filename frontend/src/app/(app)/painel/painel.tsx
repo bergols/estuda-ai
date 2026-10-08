@@ -19,6 +19,8 @@ import {
 } from "@/lib/consultas";
 import { dia, mes, porcento, usd } from "@/lib/formato";
 
+import { SecaoFoco } from "./foco";
+
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const hora = (iso: string) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
@@ -61,6 +63,7 @@ export function Painel() {
       <Calendario disciplinaId={disciplinaId} />
       <Previsao disciplinaId={disciplinaId} />
       <CardsDificeis disciplinaId={disciplinaId} />
+      <SecaoFoco disciplinaId={disciplinaId} />
       <Custos disciplinaId={disciplinaId} />
     </>
   );
