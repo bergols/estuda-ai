@@ -653,7 +653,7 @@ export interface components {
              * Scope
              * @default
              */
-            scope: string;
+            scope?: string;
             /** Username */
             username: string;
         };
@@ -956,7 +956,7 @@ export interface components {
              * Quantidade
              * @default 8
              */
-            quantidade: number;
+            quantidade?: number;
             /** Tema */
             tema?: string | null;
         };
@@ -1005,7 +1005,7 @@ export interface components {
              * K
              * @default 6
              */
-            k: number;
+            k?: number;
             /** Pergunta */
             pergunta: string;
         };
@@ -1248,7 +1248,7 @@ export interface components {
              * @default bearer
              * @constant
              */
-            token_type: "bearer";
+            token_type?: "bearer";
         };
         /** TrechoOrigem */
         TrechoOrigem: {

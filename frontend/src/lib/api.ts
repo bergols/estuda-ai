@@ -42,6 +42,11 @@ function mensagemDoErro(erro: unknown): string {
   if (Array.isArray(detalhe)) {
     return detalhe.map((d: { msg?: string }) => d.msg ?? "").filter(Boolean).join("; ");
   }
+  // Falha do LLM (502): {"mensagem": "...", "detalhe": "...", "geracao_id": ...}
+  if (detalhe && typeof detalhe === "object" && "mensagem" in detalhe) {
+    const { mensagem, detalhe: motivo } = detalhe as { mensagem: string; detalhe?: string };
+    return motivo ? `${mensagem}: ${motivo}` : mensagem;
+  }
   return "algo deu errado; tente de novo";
 }
 

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "tipos": "openapi-typescript openapi.json -o src/lib/api-schema.d.ts",
+    "tipos": "openapi-typescript openapi.json --default-non-nullable false -o src/lib/api-schema.d.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

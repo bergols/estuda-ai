@@ -58,9 +58,9 @@ export function AreaTexto({
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement> & { rotulo: string }) {
   return (
-    <label className={`block ${className}`}>
+    <label className="block">
       <span className="rotulo">{rotulo}</span>
-      <textarea {...props} className={`${CAMPO} resize-y`} />
+      <textarea {...props} className={`${CAMPO} resize-y ${className}`} />
     </label>
   );
 }
@@ -119,7 +119,8 @@ export function textoDoErro(erro: unknown): string {
     if (erro.status === 429 && erro.tentarDeNovoEmS) {
       return `${erro.message} (de novo em ${tempoAte(erro.tentarDeNovoEmS)})`;
     }
-    if (erro.status >= 500) return "A API teve um problema. Tente de novo em instantes.";
+    // 502/503: a API explicou o que falhou (ex.: o LLM). 500: erro inesperado, sem detalhe.
+    if (erro.status === 500 || erro.status > 503) return "A API teve um problema. Tente de novo em instantes.";
     return erro.message;
   }
   return "Sem conexão com o servidor.";
