@@ -65,5 +65,6 @@ async function repassar(request: NextRequest, ctx: RouteContext<"/api/[...caminh
 
 export const GET = repassar;
 export const POST = repassar;
+export const PUT = repassar;
 export const PATCH = repassar;
 export const DELETE = repassar;
