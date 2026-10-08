@@ -13,10 +13,38 @@ import { ipDoCliente, origemConfiavel as origemPermitida } from "./bff";
 
 export const COOKIE_SESSAO = "estuda_ai_sessao";
 
+export class ErroDeConfiguracao extends Error {}
+
 export function urlDaApi(caminho: string): URL {
   const base = process.env.BACKEND_URL;
-  if (!base) throw new Error("BACKEND_URL não configurada");
+  if (!base) throw new ErroDeConfiguracao("BACKEND_URL não configurada no servidor do frontend");
   return new URL(caminho, base.endsWith("/") ? base : `${base}/`);
+}
+
+/**
+ * fetch para a API com falhas traduzidas em respostas claras, em vez de um 500 genérico:
+ * - variável faltando no deploy (ex.: BACKEND_URL salva depois do último deploy): 500
+ *   dizendo qual;
+ * - API inalcançável (servidor desligado, túnel caído, DNS): 503 "fora do ar".
+ */
+export async function chamarApi(caminho: string, init: RequestInit): Promise<Response> {
+  let url: URL;
+  try {
+    url = urlDaApi(caminho);
+  } catch (erro) {
+    if (erro instanceof ErroDeConfiguracao) {
+      return Response.json({ detail: erro.message }, { status: 500 });
+    }
+    throw erro;
+  }
+  try {
+    return await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(120_000) });
+  } catch {
+    return Response.json(
+      { detail: "o servidor da API está fora do ar no momento; tente de novo mais tarde" },
+      { status: 503 },
+    );
+  }
 }
 
 /**

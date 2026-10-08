@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { caminhoDaApi, caminhoPermitido } from "@/lib/bff";
-import { COOKIE_SESSAO, cabecalhosDoBff, origemConfiavel, urlDaApi } from "@/lib/sessao";
+import { COOKIE_SESSAO, cabecalhosDoBff, chamarApi, origemConfiavel } from "@/lib/sessao";
 
 /**
  * Repassa /api/<caminho> para a API, com o JWT do cookie em "Authorization".
@@ -26,8 +26,7 @@ async function repassar(request: NextRequest, ctx: RouteContext<"/api/[...caminh
     return NextResponse.json({ detail: "sessão expirada" }, { status: 401 });
   }
 
-  const url = urlDaApi(caminhoDaApi(caminho));
-  url.search = request.nextUrl.search;
+  const caminhoComBusca = caminhoDaApi(caminho) + request.nextUrl.search;
 
   const cabecalhos: Record<string, string> = {
     Authorization: `Bearer ${token}`,
@@ -38,14 +37,13 @@ async function repassar(request: NextRequest, ctx: RouteContext<"/api/[...caminh
   if (tipo) cabecalhos["Content-Type"] = tipo; // inclui o boundary do multipart (upload)
 
   const temCorpo = !["GET", "HEAD"].includes(request.method);
-  const resposta = await fetch(url, {
+  const resposta = await chamarApi(caminhoComBusca, {
     method: request.method,
     headers: cabecalhos,
     // O corpo vai em stream (o upload de PDF não é carregado inteiro na memória)
     body: temCorpo ? request.body : undefined,
     // @ts-expect-error: "duplex" é exigido pelo fetch do Node para corpo em stream
     duplex: temCorpo ? "half" : undefined,
-    cache: "no-store",
     redirect: "manual",
   });
 

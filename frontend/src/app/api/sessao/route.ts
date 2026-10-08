@@ -4,9 +4,9 @@ import { NextResponse } from "next/server";
 import {
   COOKIE_SESSAO,
   cabecalhosDoBff,
+  chamarApi,
   opcoesDoCookie,
   origemConfiavel,
-  urlDaApi,
 } from "@/lib/sessao";
 
 /** Login: troca e-mail e senha por um cookie httpOnly com o JWT. */
@@ -23,14 +23,13 @@ export async function POST(request: Request) {
   }
 
   // A API espera o formulário do fluxo "password" do OAuth2 (username/password).
-  const resposta = await fetch(urlDaApi("auth/login"), {
+  const resposta = await chamarApi("auth/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       ...cabecalhosDoBff(request),
     },
     body: new URLSearchParams({ username: email, password: senha }),
-    cache: "no-store",
   });
   const corpo = await resposta.json().catch(() => ({ detail: "erro na API" }));
   if (!resposta.ok) {
