@@ -588,3 +588,38 @@ A tabela `limites_taxa` implementa janela fixa com `date_bin`.
 ```sql
 
 ```
+
+## Fase 7 — App desktop, sessões offline e idempotência
+
+A sessão 2 desta fase grava no Postgres sessões de estudo que podem chegar **mais de uma
+vez**: o app desktop guarda tudo num SQLite local quando a internet cai e reenvia depois.
+Estes exercícios preparam o terreno; os próximos entram junto com as sessões 2 a 4.
+
+### 7.1 Reenvio, duplicata e `ON CONFLICT`
+
+Crie uma tabela de rascunho (fora das migrations, num banco de teste):
+`CREATE TABLE envio (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, usuario_id bigint
+NOT NULL, chave uuid NOT NULL, minutos int NOT NULL);`
+
+- (a) Simule o problema: o app manda "sessão de 50 minutos", a resposta se perde (timeout)
+  e o app manda de novo. Rode o mesmo `INSERT` duas vezes. Quantas sessões existem, e
+  quanto vale `SUM(minutos)` no gráfico de horas de foco?
+- (b) Acrescente `UNIQUE (usuario_id, chave)` e reescreva o envio com
+  `INSERT ... ON CONFLICT (usuario_id, chave) DO NOTHING RETURNING id`. O que o
+  `RETURNING` devolve na segunda vez? Como o servidor responde "já recebi" ao app
+  nesse caso, sem um `SELECT` antes (lembre da regra "nada de SELECT para checar antes do
+  INSERT" do CLAUDE.md: por que ela existe)?
+- (c) Por que a chave é **gerada no app** (um UUID criado quando a sessão começa) e não um
+  `id` do banco? O que daria errado se fosse `(usuario_id, iniciada_em)`?
+- (d) Uma sessão é enviada "em andamento" e depois "concluída". Escreva um
+  `ON CONFLICT ... DO UPDATE` que aceite a mudança de status, mas nunca volte de
+  "concluída" para "em andamento" se os envios chegarem fora de ordem (dica: `WHERE` no
+  `DO UPDATE` e a pseudo-tabela `EXCLUDED`).
+- (e) A unicidade é `(usuario_id, chave)` e não só `(chave)`. Que ataque ou bug a versão
+  com `usuario_id` evita?
+
+**Minha resposta:**
+
+```sql
+
+```

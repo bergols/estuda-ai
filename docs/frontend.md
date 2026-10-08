@@ -216,6 +216,23 @@ daltonismo), não no olho:
   ficou em 2,3:1, abaixo de 3:1. É aceitável só porque é contexto recessivo **e** todo
   gráfico tem a tabela.
 
+## 5b. Dois alvos: web e desktop (fase 7)
+
+O mesmo código compila para a web (Vercel, com BFF) e para o app desktop (exportação
+estática dentro do Tauri). O que muda:
+
+- `ALVO=desktop` no `next.config.ts`: `output: "export"`, sem Cache Components (PPR exige
+  servidor), `distDir: "out"`, `tsconfig.desktop.json` próprio;
+- arquivos só da web terminam em `.web.ts` (`route.web.ts`, `proxy.web.ts`): a web os
+  reconhece por `pageExtensions`, e o desktop os ignora;
+- disciplina pela query string (`/disciplina?id=5`), porque a exportação não gera páginas
+  para ids que só existem no banco;
+- `lib/plataforma.ts` (`DESKTOP`) escolhe, em tempo de build, o `fetch` do cliente tipado:
+  o do navegador (BFF com cookie) ou o da ponte para o Rust (`lib/desktop.ts`), que
+  acrescenta o token guardado no cofre do sistema.
+
+Detalhes e o porquê em [`modo-foco.md`](modo-foco.md), seções 2 e 3.
+
 ## 6. Testes e CI
 
 - `npm test` (Vitest): as regras de segurança do BFF (allowlist, CSRF, IP), como

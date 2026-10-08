@@ -12,7 +12,8 @@ gerados por LLM, repetição espaçada SM-2, dashboard). Projeto de portfólio c
   `geracao-llm.md` para LLM/RAG/auditoria, `repeticao-espacada.md` para SM-2/fila/
   concorrência/fuso, `analytics.md` para as consultas analíticas, `seguranca.md` para
   auth/isolamento/injection/rate limit/privilégios/CI, `frontend.md` para BFF/cookies/
-  contrato tipado/TanStack Query/gráficos, `deploy.md` para hospedagem/backup/operação),
+  contrato tipado/TanStack Query/gráficos, `deploy.md` para hospedagem/backup/operação,
+  `modo-foco.md` para app desktop/offline/Spotify/bloqueios),
   diga o
   *porquê* (alternativas consideradas, custo/benefício), não só o quê. Didático,
   em português.
@@ -33,7 +34,17 @@ na Vercel (Root Directory `frontend`, região gru1, corpo de requisição máx. 
 até 4 MB no upload) + API/Postgres numa VM
 Oracle Always Free (ARM, São Paulo, 1 OCPU/4 GB: a memória precisa ficar acima de 20% para a VM não ser "ociosa") escolhida pelo autor ("grátis, só para
 eu usar"), com `docker-compose.prod.yml`. A criação da conta/VM/domínio é tarefa manual
-do autor (`docs/deploy.md`, seção 4). Roadmap no `README.md`.
+do autor (`docs/deploy.md`, seção 4). **Hoje, provisoriamente**, a API roda no Mac do autor
+(`~/estuda-ai-servidor`) exposta por Tailscale Funnel (`docs/deploy.md`, 4b), até a VM
+Oracle sair (script `deploy/oracle-criar-vm.sh`). Roadmap no `README.md`.
+
+**Fase 7** (app desktop, sessões de estudo, Spotify, modo foco) em 4 sessões, plano aprovado:
+(1) app Tauri + login + instaladores **concluída**; (2) sessões de estudo, SQLite offline
+com chaves de idempotência, analytics; (3) Spotify (PKCE, refresh token cifrado na
+aplicação com AES-GCM, não pgcrypto); (4) bloqueio de programas e de sites (hosts, com
+restauração garantida) e saída de emergência. Decisões já tomadas pelo autor: o desktop
+fala com o **BFF da Vercel** (não direto com a API); a sessão de estudo roda só no desktop
+(a web mostra painel/histórico).
 Pendente da fase 3: o teste real com a API (falta `ANTHROPIC_API_KEY` no `.env`). Exercícios de SQL por fase em `docs/exercicios.md` (sem respostas; o autor
 preenche "Minha resposta:").
 
@@ -56,6 +67,11 @@ docker compose exec -T backend python -m scripts.exportar_openapi > frontend/ope
 npm --prefix frontend run dev        # http://localhost:3000 (frontend/.env.local: BACKEND_URL, BFF_SEGREDO)
 npm --prefix frontend run tipos      # tipos TS a partir do openapi.json
 npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend test && npm --prefix frontend run build
+npm --prefix frontend run build:desktop                   # exportação estática (alvo desktop) em frontend/out
+ESTUDA_AI_URL=http://localhost:3000 npm --prefix desktop run dev   # app desktop contra o BFF local
+cargo fmt --all --check --manifest-path desktop/Cargo.toml && cargo clippy --manifest-path desktop/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path desktop/Cargo.toml
+ESTUDA_AI_TESTE_SENHA=<SENHA_DEV> cargo test --manifest-path desktop/Cargo.toml -- --ignored   # fluxo real: BFF local + Keychain
+npm --prefix desktop run build -- --target universal-apple-darwin   # .app/.dmg universal local (~4 min)
 ```
 
 Seeds: `scripts/seed_experimento.py` (50 mil trechos sintéticos, fase 2) e
@@ -83,9 +99,19 @@ Armadilhas de ambiente já encontradas:
 - Preview no app desktop: o `launch.json` lido é o da pasta da sessão
   (`~/claude projetos/.claude/launch.json`, entrada `estuda-ai-frontend`), não o do repo.
 - Next 16: `LayoutProps`/`PageProps`/`RouteContext` são gerados em `.next/types`; por isso
-  `typecheck` = `next typegen && tsc`. Middleware agora se chama `proxy.ts`.
+  `typecheck` = `next typegen && tsc`. Middleware agora se chama `proxy.ts` (aqui `proxy.web.ts`).
 - O SDK da Anthropic sem chave lança `TypeError` (não `AnthropicError`): `ClienteLLM.gerar`
   confere a credencial antes.
+- Rust veio do Homebrew (`rustup`, keg-only): o shell das ferramentas não lê o `~/.zshrc`,
+  então prefixe `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"`.
+- `next dev` às vezes fica com um módulo antigo no servidor depois de renomear arquivos
+  (`... is not a function` numa rota): reinicie o servidor de dev.
+- `git add caminho/que/foi/renomeado` falha ("did not match any files") e, num `&&`, o
+  commit roda só com o que já estava no índice. Para renomeações, use
+  `git commit -- <caminhos>` ou confira `git status` antes.
+- Sem permissão de Acessibilidade não dá para digitar/clicar no app desktop por script.
+  Para ver a janela: id via `CGWindowListCopyWindowInfo` (script Swift) e
+  `screencapture -x -o -l <id>`; para testar o fluxo, o teste `--ignored` do `ponte.rs`.
 
 ## Gerar flashcards e questões pelo Claude Code (sem API paga)
 
@@ -224,6 +250,28 @@ Detalhes e o porquê em `docs/frontend.md`.
 - Gráficos (`src/components/graficos.tsx`): forma pelo trabalho do dado, um eixo, marcas
   finas, tabela equivalente em toda figura; cores `--grafico-destaque/--grafico-contexto`
   validadas (claro e escuro) com o validador da skill de dataviz.
+
+## Desktop (fase 7)
+
+Detalhes e o porquê em `docs/modo-foco.md`.
+
+- Tauri v2 em `desktop/` (workspace Cargo): `nucleo/` (regras puras, sem Tauri: testes
+  rápidos, rodam no Linux do CI) e `src-tauri/` (janela, comandos, cofre). Lógica nova
+  que dá para testar sem janela vai para o `nucleo`.
+- As telas são o frontend exportado (`ALVO=desktop` → `frontend/out`). Arquivo que só
+  existe na web (rota do BFF, proxy) termina em `.web.ts`. Nada de rota dinâmica
+  (`[id]`): use query string. Rode `build:desktop` depois de mexer no frontend.
+- **O token nunca entra no JavaScript:** fica no cofre do sistema (`cofre.rs`, crate
+  `keyring`); a página chama `invoke("chamar_api")` e o Rust acrescenta o Bearer. Rota
+  nova da API que o desktop usa entra na allowlist de `nucleo/src/api.rs` **e** na do
+  `frontend/src/lib/bff.ts`.
+- Comando Tauri novo: função em `src-tauri/src/`, nome em `COMANDOS` do `build.rs` e
+  permissão `allow-<comando>` na capability da janela que pode usá-lo (menor privilégio).
+- CSP restritiva em `tauri.conf.json` (sem `unsafe-inline` em script). Cliente HTTP do
+  Rust não segue redirecionamentos (levariam o Bearer).
+- Instaladores: `.github/workflows/desktop.yml`, só por tag `desktop-v<versão do
+  tauri.conf.json>` (Release em rascunho) ou "Run workflow". Não rode a cada push: minuto
+  de macOS custa 10x na cota do repositório privado.
 
 ## Produção (fase 6)
 

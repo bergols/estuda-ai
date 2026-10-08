@@ -394,6 +394,13 @@ encontrado pelos testes) e como a API recebe o IP real do cliente sem confiar nu
 que qualquer um escreve (`X-Cliente-IP` só com `X-BFF-Segredo`). Ver
 [`frontend.md`](frontend.md), seção 1.
 
+O app desktop (fase 7) passa pelo mesmo BFF com `Authorization: Bearer` e guarda o token
+no cofre do sistema. Duas regras novas: com Bearer, a checagem de CSRF não se aplica
+(ninguém anexa um `Authorization` por você, diferente do cookie); e `/api/token`, que
+devolve o token no corpo, recusa navegadores (`Sec-Fetch-Site` presente), para um XSS
+na web não obter por ali o que o cookie `httpOnly` esconde. Ver
+[`modo-foco.md`](modo-foco.md), seções 3 e 4.
+
 ## 9. CI
 
 `.github/workflows/ci.yml`, a cada push e pull request:

@@ -10,14 +10,15 @@ desempenho por disciplina e tópico.
 banco estão explicadas nos commits e em [`docs/`](docs/): [modelagem](docs/modelagem.md),
 [busca semântica](docs/busca-semantica.md), [geração com LLM](docs/geracao-llm.md),
 [repetição espaçada](docs/repeticao-espacada.md), [analytics](docs/analytics.md),
-[segurança](docs/seguranca.md), [frontend](docs/frontend.md), [deploy](docs/deploy.md) e
-[exercícios de SQL](docs/exercicios.md).
+[segurança](docs/seguranca.md), [frontend](docs/frontend.md), [deploy](docs/deploy.md),
+[app desktop e modo foco](docs/modo-foco.md) e [exercícios de SQL](docs/exercicios.md).
 
 ## Arquitetura
 
 ```mermaid
 flowchart LR
     U["Navegador / celular"] -- HTTPS --> N["Vercel: Next.js<br/>telas + BFF<br/>(cookie httpOnly)"]
+    D["App desktop (Tauri)<br/>Windows · macOS<br/>token no cofre do sistema"] -- "HTTPS + Bearer" --> N
     N -- "HTTPS + X-BFF-Segredo<br/>Bearer JWT, IP do cliente" --> C["Caddy na VM Oracle<br/>(sem o segredo: 404)"]
     C --> B["FastAPI<br/>papel estuda_ai_app"]
     B -- "SQL (bind parameters)" --> P[("PostgreSQL 16<br/>pgvector · HNSW · GIN<br/>MV de analytics")]
@@ -30,6 +31,9 @@ flowchart LR
 
 - **O navegador nunca fala com a API:** o Next guarda o JWT num cookie `httpOnly` e repassa
   as chamadas por uma allowlist ([frontend](docs/frontend.md)).
+- **App desktop (Windows e macOS):** as mesmas telas, exportadas como arquivos estáticos
+  dentro de um app Tauri. O lado Rust guarda o token no cofre do sistema e chama o mesmo
+  BFF ([modo foco](docs/modo-foco.md)).
 - **Dois papéis no Postgres:** a API só lê e escreve dados (`estuda_ai_app`); só as
   migrations mudam o schema ([segurança](docs/seguranca.md), seção 6).
 - **Busca:** semântica (pgvector + HNSW), textual (tsvector + GIN) e híbrida (RRF), sempre
@@ -48,6 +52,7 @@ flowchart LR
 | PDF | PyMuPDF |
 | LLM | API da Anthropic (SDK `anthropic`), padrão Claude Haiku 4.5, saída estruturada validada com Pydantic |
 | Frontend | Next.js 16 + TypeScript + Tailwind, TanStack Query, Recharts; BFF com cookie httpOnly |
+| Desktop | Tauri v2 (Rust): exportação estática do Next, token no Keychain/Credential Manager, instaladores pelo GitHub Actions |
 | Autenticação | argon2id (senhas) + JWT; papel do banco com menor privilégio |
 | Infra | Docker Compose, Caddy (HTTPS), GitHub Actions (testes + gitleaks); produção numa VM Oracle Always Free |
 | Testes | pytest contra Postgres real |
@@ -151,6 +156,23 @@ docker compose exec backend python -m scripts.seed_revisoes --senha-dev
 
 O navegador nunca fala direto com a API: o Next guarda o login num cookie `httpOnly` e
 repassa as chamadas (ver [docs/frontend.md](docs/frontend.md)).
+
+### App desktop
+
+Baixe o instalador na aba **Releases** do repositório (`.dmg` para macOS, Apple Silicon
+ou Intel; `-setup.exe` para Windows). Os apps não têm assinatura paga: o macOS e o Windows
+avisam na primeira vez. Veja como abrir em
+[docs/modo-foco.md](docs/modo-foco.md#6-instalar-sem-assinatura-de-código).
+
+Para desenvolver (precisa de Rust: `rustup`), com a API e a web (porta 3000) no ar:
+
+```bash
+npm --prefix desktop install
+```
+
+```bash
+ESTUDA_AI_URL=http://localhost:3000 npm --prefix desktop run dev
+```
 
 ### Explorar o banco
 
@@ -355,7 +377,9 @@ estuda-ai/
 ├── docker-compose.yml       # desenvolvimento
 ├── docker-compose.prod.yml  # produção: Caddy + Next + API + Postgres, 3 redes
 ├── deploy/                  # Caddyfile, preparar-servidor, gerar-env, backup, restaurar, atualizar
-├── .github/workflows/ci.yml # lint + testes (Postgres+pgvector) + gitleaks
+├── .github/workflows/
+│   ├── ci.yml               # lint + testes (Postgres+pgvector) + build web/desktop + núcleo Rust + gitleaks
+│   └── desktop.yml          # instaladores macOS/Windows (sob demanda: tag desktop-v*)
 ├── .gitleaks.toml           # exceções (estreitas) da varredura de segredos
 ├── backend/
 │   ├── app/
@@ -377,13 +401,17 @@ estuda-ai/
 │   ├── seguranca.md         # argon2id, JWT, isolamento, SQL injection, rate limit, privilégios
 │   ├── frontend.md          # BFF, cookie httpOnly, contrato tipado, TanStack Query, gráficos
 │   ├── deploy.md            # hospedagem, passo a passo, backup/restore, operação
+│   ├── modo-foco.md         # app desktop, offline, Spotify, bloqueios
 │   ├── exercicios.md        # exercícios de SQL por fase
 │   └── experimentos/        # resultados gerados por script
+├── desktop/                 # app Tauri v2 (Windows/macOS)
+│   ├── nucleo/              # regras puras em Rust (URL da API, allowlist)
+│   └── src-tauri/           # janela, ponte para a API, cofre do sistema
 └── frontend/
     ├── openapi.json         # contrato exportado do backend (tipos TS gerados dele)
     └── src/
-        ├── proxy.ts         # sem cookie de sessão -> /login
-        ├── app/api/         # BFF: /api/sessao (login) e /api/[...caminho] (repasse)
+        ├── proxy.web.ts     # sem cookie de sessão -> /login (só na web)
+        ├── app/api/         # BFF: /api/sessao, /api/token (desktop) e /api/[...caminho]
         ├── app/(app)/       # disciplinas, revisão, painel, conta
         ├── components/      # ui, gráficos, navegação, tema
         └── lib/             # cliente tipado, hooks (TanStack Query), regras do BFF
@@ -420,3 +448,11 @@ estuda-ai/
   - [x] Deploy: `docker-compose.prod.yml` (Caddy com HTTPS, API e banco sem porta exposta,
     3 redes, backend sem root), scripts de servidor, backup diário com `pg_dump` + restore
     testado num servidor novo, diagrama de arquitetura. Destino: VM Oracle Always Free.
+- [ ] **Fase 7: app desktop, sessões de estudo, Spotify e modo foco.**
+  - [x] App Tauri v2 para Windows e macOS com as telas do frontend (exportação estática),
+    login com token no cofre do sistema, instaladores pelo GitHub Actions.
+  - [ ] Sessões de estudo (pomodoro, bloco, 52/17), modo offline com SQLite e chaves de
+    idempotência, analytics de foco.
+  - [ ] Spotify (OAuth com PKCE, refresh token cifrado, player por método/disciplina).
+  - [ ] Modo foco: janela por cima de tudo, bloqueio de programas e de sites (hosts),
+    saída de emergência.
