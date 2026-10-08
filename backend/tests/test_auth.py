@@ -81,7 +81,7 @@ def test_conta_sem_senha_nao_faz_login(client, usuario):
 
 
 def test_senha_curta_e_recusada():
-    with pytest.raises(ValueError, match="12 caracteres"):
+    with pytest.raises(ValueError, match="8 caracteres"):
         auth.gerar_hash("curta")
 
 

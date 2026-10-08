@@ -62,7 +62,12 @@ Mais dois detalhes do login (`auth.autenticar`):
   falso. Sem isso, "e-mail inexistente" responderia em 1 ms e "senha errada" em 40 ms,
   e o **tempo** revelaria o que a mensagem esconde (timing attack).
 
-Senha mínima de 12 caracteres. O tamanho pesa mais que a "complexidade" (NIST 800-63B).
+Senha mínima de **8 caracteres**, o mínimo do NIST 800-63B para senha escolhida pela
+pessoa. Começou em 12 e baixou a pedido do autor (12 incomodava no celular). O que
+segura a força bruta pela internet não é o tamanho mínimo: é o limite de tentativas (5
+falhas por e-mail e 20 por IP a cada 15 minutos), o custo do argon2id e a API só
+alcançável pelo BFF. O tamanho pesa mais que a "complexidade" (letras, números,
+símbolos), por isso não há regra de composição.
 
 ## 2. Tokens: JWT com expiração e revogação
 

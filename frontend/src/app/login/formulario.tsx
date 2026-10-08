@@ -39,7 +39,7 @@ export function FormularioLogin() {
   return (
     <form onSubmit={entrar} className="space-y-6">
       <Campo rotulo="E-mail" name="email" type="email" autoComplete="username" required autoFocus />
-      <Campo rotulo="Senha" name="senha" type="password" autoComplete="current-password" required minLength={12} />
+      <Campo rotulo="Senha" name="senha" type="password" autoComplete="current-password" required minLength={8} />
       {erro !== null && <Erro erro={erro} />}
       <Botao type="submit" carregando={enviando} className="w-full">
         {enviando ? "Entrando…" : "Entrar"}

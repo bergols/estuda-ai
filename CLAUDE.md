@@ -153,7 +153,7 @@ Detalhes e o porquê em `docs/seguranca.md`.
 - **SQL:** valores sempre como bind parameter. Identificador dinâmico só via allowlist
   (`_coluna()` em `analytics.py`) ou `psycopg.sql.Identifier`; comandos utilitários sem bind
   (`ALTER ROLE ... PASSWORD`) com `psycopg.sql.Literal`.
-- Senhas: argon2id (`app/servicos/auth.py`), mínimo 12 caracteres. JWT HS256 com
+- Senhas: argon2id (`app/servicos/auth.py`), mínimo 8 caracteres (NIST; decisão do autor). JWT HS256 com
   `algorithms=["HS256"]` fixo; `JWT_SECRET` é `SecretStr`. Sem cadastro público:
   `scripts/criar_usuario.py`.
 - Rate limit: UPSERT em `limites_taxa` (UNLOGGED, janela fixa com `date_bin`), commit imediato.

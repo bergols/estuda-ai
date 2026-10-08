@@ -31,7 +31,9 @@ from app.config import get_settings
 from app.models import Usuario
 
 ALGORITMO = "HS256"
-SENHA_MINIMA = 12
+# 8: o mínimo do NIST 800-63B para senha escolhida pela pessoa. O que segura a força
+# bruta online é o limite de tentativas (5 falhas por e-mail / 15 min) e o argon2id.
+SENHA_MINIMA = 8
 _hasher = PasswordHasher()  # argon2id, m=64 MiB, t=3, p=4 (perfil "low memory" da RFC 9106)
 # Hash de uma senha qualquer, para gastar o mesmo tempo quando o e-mail não existe.
 _HASH_FALSO = _hasher.hash("senha-que-nao-existe-de-ninguem")

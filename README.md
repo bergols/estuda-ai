@@ -164,7 +164,7 @@ Comandos úteis no psql: `\dt` (tabelas), `\d+ flashcards` (estrutura completa),
 ### Criar a sua conta
 
 Não há cadastro público: a conta é criada por um comando de admin, que pede a senha
-(mínimo 12 caracteres) duas vezes sem mostrá-la:
+(mínimo 8 caracteres) duas vezes sem mostrá-la:
 
 ```bash
 docker compose exec backend python -m scripts.criar_usuario --email voce@exemplo.com --nome "Seu nome"
