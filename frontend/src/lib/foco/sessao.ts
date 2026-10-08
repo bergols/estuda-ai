@@ -31,6 +31,8 @@ export type EstadoLocal = {
   pausasRegistradas: number[];
   /** A janela perdeu o foco durante uma fase de FOCO, neste instante */
   foraDesdeMs: number | null;
+  /** Último sinal de vida da tela (gravado a cada BATIDA_MS) */
+  vistoEmMs?: number;
 };
 
 export type SessaoAtiva = { dados: SessaoEnvio; local: EstadoLocal };
@@ -188,4 +190,37 @@ export function encerrar(
   const c = configDe(atual.dados);
   const status = statusAoEncerrar(plano(c), c, atual.local.timer, agora);
   return { ...atual, dados: { ...atual.dados, status, terminada_em: iso(agora) } };
+}
+
+// ---------------------------------------------------- app fechado ou travado
+
+/** De quanto em quanto tempo a tela grava "ainda estou aberta". */
+export const BATIDA_MS = 30_000;
+
+export function ultimoSinal(s: SessaoAtiva): number {
+  return s.local.vistoEmMs ?? s.local.timer.inicioMs;
+}
+
+export function precisaBatida(s: SessaoAtiva, agora: number): boolean {
+  return agora - ultimoSinal(s) >= BATIDA_MS;
+}
+
+export function bater(s: SessaoAtiva, agora: number): SessaoAtiva {
+  return { ...s, local: { ...s.local, vistoEmMs: agora } };
+}
+
+/**
+ * O app fechou (ou travou) no meio da sessão e foi reaberto. Continuar: o tempo em que
+ * ficou fechado vira uma pausa manual (não foi foco no app). Sem isso, três horas de app
+ * fechado contariam como três horas de foco, porque o timer calcula pelo relógio.
+ */
+export function continuarAposFechamento(s: SessaoAtiva, agora: number, novaChave: GeradorDeChave): SessaoAtiva {
+  if (s.local.timer.pausadoDesdeMs !== null) return bater({ ...s, local: { ...s.local, foraDesdeMs: null } }, agora);
+  const congelada = { ...s, local: { ...s.local, foraDesdeMs: null, timer: pausar(s.local.timer, ultimoSinal(s)) } };
+  return bater(retomarSessao(congelada, agora, novaChave), agora);
+}
+
+/** Encerrar a sessão que ficou aberta: no último sinal de vida, não "agora". */
+export function encerrarAposFechamento(s: SessaoAtiva, novaChave: GeradorDeChave): SessaoAtiva {
+  return encerrar({ ...s, local: { ...s.local, foraDesdeMs: null } }, ultimoSinal(s), novaChave);
 }

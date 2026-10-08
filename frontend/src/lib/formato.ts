@@ -33,3 +33,16 @@ export function mes(isoDia: string) {
 }
 
 export const usd = (v: string | number) => `US$ ${Number(v).toFixed(4)}`;
+
+/** 3900 → "1 h 05 min"; 1500 → "25 min"; 40 → "40 s" */
+export function duracao(segundos: number | null | undefined) {
+  if (segundos == null) return "—";
+  if (segundos < 60) return `${Math.round(segundos)} s`;
+  const minutos = Math.round(segundos / 60);
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return h > 0 ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min`;
+}
+
+const HORA = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+export const hora = (iso: string | number) => HORA.format(new Date(iso));

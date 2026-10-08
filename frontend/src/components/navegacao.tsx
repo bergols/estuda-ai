@@ -7,8 +7,9 @@ import { Suspense } from "react";
 import { BotaoTema } from "./tema";
 
 const ITENS = [
-  { href: "/", rotulo: "Disciplinas", ativo: (p: string) => p === "/" || p.startsWith("/disciplinas") },
+  { href: "/", rotulo: "Disciplinas", ativo: (p: string) => p === "/" || p.startsWith("/disciplina") },
   { href: "/revisao", rotulo: "Revisão", ativo: (p: string) => p.startsWith("/revisao") },
+  { href: "/foco", rotulo: "Foco", ativo: (p: string) => p.startsWith("/foco") },
   { href: "/painel", rotulo: "Painel", ativo: (p: string) => p.startsWith("/painel") },
   { href: "/conta", rotulo: "Conta", ativo: (p: string) => p.startsWith("/conta") },
 ];

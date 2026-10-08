@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   SAIDA_MINIMA_MS,
+  bater,
+  continuarAposFechamento,
   encerrar,
+  encerrarAposFechamento,
+  precisaBatida,
   novaSessao,
   pausarSessao,
   registrarPausasPlanejadas,
@@ -116,5 +120,32 @@ describe("encerrar", () => {
     const fim = encerrar(pausarSessao(s, min(10)), min(20), chave);
     expect(fim.dados.pausas?.map((p) => p.tipo)).toEqual(["manual"]);
     expect(fim.local.timer.pausadoDesdeMs).toBeNull();
+  });
+});
+
+describe("app fechado ou travado no meio", () => {
+  it("batida de vida a cada 30 s", () => {
+    const { s } = pomodoro();
+    expect(precisaBatida(s, T0 + 29_000)).toBe(false);
+    expect(precisaBatida(s, T0 + 30_000)).toBe(true);
+    expect(precisaBatida(bater(s, T0 + 30_000), T0 + 31_000)).toBe(false);
+  });
+
+  it("continuar: o tempo fechado vira pausa manual, não foco", () => {
+    const { s, chave } = pomodoro();
+    const visto = bater(s, min(10)); // último sinal aos 10 min; o app fechou
+    const r = continuarAposFechamento(visto, min(70), chave); // reaberto 1 h depois
+    expect(r.dados.pausas).toEqual([expect.objectContaining({
+      tipo: "manual", iniciada_em: "2026-10-08T13:10:00.000Z", terminada_em: "2026-10-08T14:10:00.000Z",
+    })]);
+    // O timer volta de onde parou: 15 min restantes no 1o foco
+    expect(r.local.timer.pausadoDesdeMs).toBeNull();
+  });
+
+  it("encerrar: no último sinal de vida (3 h fechado não viram 3 h de foco)", () => {
+    const { s, chave } = pomodoro();
+    const fim = encerrarAposFechamento(bater(s, min(40)), chave);
+    expect(fim.dados.terminada_em).toBe("2026-10-08T13:40:00.000Z");
+    expect(fim.dados.status).toBe("abandonada");
   });
 });

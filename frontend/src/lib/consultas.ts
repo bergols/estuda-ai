@@ -20,6 +20,7 @@ export const chaves = {
   questoes: (id: number) => ["disciplinas", id, "questoes"] as const,
   fila: ["revisoes", "hoje"] as const,
   gastos: ["gastos"] as const,
+  sessoes: ["sessoes"] as const,
   analytics: (rota: string, disciplinaId?: number) => ["analytics", rota, disciplinaId ?? "todas"] as const,
 };
 
@@ -220,6 +221,16 @@ export function useRevisar() {
       dados(api.POST("/revisoes/{flashcard_id}", { params: { path: { flashcard_id: flashcardId } }, body: corpo })),
     // A fila NÃO é invalidada aqui (ver useFilaDoDia); o analytics sim.
     onSuccess: () => cliente.invalidateQueries({ queryKey: ["analytics"] }),
+  });
+}
+
+// ------------------------------------------------------- sessões de estudo
+
+/** Histórico de sessões (as do app desktop, depois de sincronizadas). */
+export function useSessoes() {
+  return useQuery({
+    queryKey: chaves.sessoes,
+    queryFn: () => dados(api.GET("/sessoes", { params: { query: { limite: 30 } } })),
   });
 }
 
