@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useSpotify } from "@/lib/consultas";
-import { type Momento, acaoMusical } from "@/lib/foco/musica";
+import { CONSULTA, type Momento, acaoMusical, proximaConsulta } from "@/lib/foco/musica";
 import {
   type Tocando,
   anterior,
@@ -51,10 +51,14 @@ export function useMusica() {
 }
 
 /**
- * A música atual e os controles do player. Consulta a cada 5 s enquanto a sessão está
- * ativa e LOGO DEPOIS de cada comando (com um pequeno atraso: o Spotify leva algumas
- * centenas de ms para refletir o play/pause). Sem isso, a primeira consulta, feita no
- * mesmo instante do play, mostrava "pausada" por 10 s.
+ * A música atual e os controles do player. Consulta enquanto a sessão está ativa:
+ *  - LOGO DEPOIS de cada comando (com um pequeno atraso: o Spotify leva algumas centenas
+ *    de ms para refletir o play/pause). Sem isso, a primeira consulta, feita no mesmo
+ *    instante do play, mostrava "pausada";
+ *  - quando a música atual deve acabar (proximaConsulta, em lib/foco/musica.ts), e não
+ *    a cada 5 s: o limite de chamadas do Spotify no modo de desenvolvimento é baixo;
+ *  - quando a janela volta a aparecer ou ganha o foco (a pessoa pode ter trocado a
+ *    música pelo próprio Spotify). Com a janela escondida (minimizada), não consulta.
  */
 export function usePlayer(ativa: boolean, conectado: boolean, aoErrar: (mensagem: string) => void) {
   const [tocando, setTocando] = useState<Tocando | null>(null);
@@ -63,18 +67,36 @@ export function usePlayer(ativa: boolean, conectado: boolean, aoErrar: (mensagem
   useEffect(() => {
     if (!ativa || !conectado) return;
     let cancelado = false;
+    // Um só timer: cada consulta agenda a seguinte (setTimeout encadeado, e não setInterval,
+    // porque o intervalo depende da resposta)
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const agendar = (ms: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(consultar, ms);
+    };
     const consultar = () => {
+      if (document.hidden) return; // volta a consultar no visibilitychange
       atual().then(
-        (t) => !cancelado && setTocando(t),
-        () => {}, // limite, Spotify fechado...: o aviso vem dos comandos; aqui só não atualiza
+        (t) => {
+          if (cancelado) return;
+          setTocando(t);
+          agendar(proximaConsulta(t));
+        },
+        // Limite, Spotify fechado...: o aviso vem dos comandos; aqui só tenta mais tarde
+        () => !cancelado && agendar(CONSULTA.parado),
       );
     };
-    const primeira = setTimeout(consultar, versao === 0 ? 1500 : 700);
-    const id = setInterval(consultar, 5_000);
+    const aoVoltar = () => {
+      if (!document.hidden) agendar(300);
+    };
+    agendar(versao === 0 ? 1500 : 700);
+    document.addEventListener("visibilitychange", aoVoltar);
+    window.addEventListener("focus", aoVoltar);
     return () => {
       cancelado = true;
-      clearTimeout(primeira);
-      clearInterval(id);
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", aoVoltar);
+      window.removeEventListener("focus", aoVoltar);
     };
   }, [ativa, conectado, versao]);
 

@@ -1,5 +1,6 @@
 import type { Esquemas } from "@/lib/api";
 
+import type { Tocando } from "./spotify";
 import type { Metodo, TipoFase } from "./timer";
 
 /**
@@ -84,4 +85,32 @@ export function uriDoLink(texto: string): string | null {
   if (uri) return t;
   const link = t.match(/^https:\/\/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(playlist|album|artist)\/([A-Za-z0-9]{22})(?:[/?#].*)?$/);
   return link ? `spotify:${link[1]}:${link[2]}` : null;
+}
+
+/** Limites da consulta do player (ms). */
+export const CONSULTA = {
+  /** Folga depois do fim previsto da música: o Spotify leva um instante para trocar a faixa. */
+  folga: 1_000,
+  minimo: 2_000,
+  /**
+   * Teto mesmo com a música longe do fim: a pessoa pode pular a faixa ou pausar pelo
+   * próprio Spotify (no celular, por exemplo), e a tela não pode ficar errada por minutos.
+   */
+  maximo: 30_000,
+  /** Pausada ou nada tocando: não há fim de música para esperar. */
+  parado: 15_000,
+};
+
+/**
+ * Daqui a quanto tempo perguntar de novo ao Spotify o que está tocando.
+ *
+ * Em vez de perguntar a cada 5 s (720 chamadas por hora de sessão), espera a música
+ * acabar: a resposta já diz quanto falta (duracao_ms - progresso_ms). Numa música de
+ * 3 min são umas 6 chamadas em vez de 36, o que importa no modo de desenvolvimento do
+ * Spotify, cujo limite de chamadas é baixo e vale para o app inteiro (erro 429).
+ */
+export function proximaConsulta(t: Tocando | null): number {
+  if (!t || !t.tocando || t.duracao_ms <= 0) return CONSULTA.parado;
+  const falta = Math.max(t.duracao_ms - t.progresso_ms, 0);
+  return Math.min(Math.max(falta + CONSULTA.folga, CONSULTA.minimo), CONSULTA.maximo);
 }

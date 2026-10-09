@@ -342,6 +342,24 @@ Toca no **Spotify deste computador** (dispositivo do tipo *Computer*, de prefer�
 máquina), nunca no celular ou na caixa de som. As regras ficam em `frontend/src/lib/foco/musica.ts` e
 `desktop/nucleo/src/spotify.rs`, ambas testadas sem rede.
 
+### O player na tela de foco
+
+A tela mostra a capa, a música e os controles (anterior, tocar/pausar, próxima, volume). Para
+saber o que está tocando, o app pergunta ao Spotify (`GET /me/player`), e **quando** perguntar
+importa: no modo de desenvolvimento o limite de chamadas é baixo e vale para o app inteiro.
+
+| Quando | Por quê |
+|---|---|
+| 0,7 s depois de cada comando (1,5 s no começo) | o Spotify leva um instante para refletir o play/pause; perguntar no mesmo instante mostrava "pausada" |
+| no fim previsto da música (`duracao_ms - progresso_ms` + 1 s), entre 2 s e 30 s | a música só muda quando acaba; o teto de 30 s pega quem pulou a faixa pelo celular |
+| a cada 15 s se pausada ou sem nada tocando | não há fim de música para esperar |
+| quando a janela volta a aparecer ou ganha o foco | a pessoa pode ter mexido no próprio Spotify |
+| nunca com a janela escondida (minimizada) | ninguém está olhando |
+
+Numa música de 3 min são umas 7 consultas, contra 36 perguntando a cada 5 s. A regra é uma função
+pura (`proximaConsulta` em `frontend/src/lib/foco/musica.ts`, com testes); o volume só sai ao
+soltar o controle (espera 350 ms sem movimento), para arrastar não virar dezenas de chamadas.
+
 ### Erros
 
 | Situação | O que o app faz |

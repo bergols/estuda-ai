@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { acaoMusical, playlistDoFoco, uriDoLink, type ConfigSpotify } from "./musica";
+import { CONSULTA, acaoMusical, playlistDoFoco, proximaConsulta, uriDoLink, type ConfigSpotify } from "./musica";
+import type { Tocando } from "./spotify";
 
 const PADRAO = "spotify:playlist:000000000000000000000A";
 const DO_5217 = "spotify:playlist:000000000000000000000B";
@@ -91,4 +92,28 @@ describe("link do Spotify para URI", () => {
       expect(uriDoLink(texto)).toBeNull();
     },
   );
+});
+
+describe("quando consultar o player de novo", () => {
+  const faixa = (mudancas: Partial<Tocando> = {}): Tocando => ({
+    tocando: true, musica: "m", artistas: "a", capa: null, progresso_ms: 0, duracao_ms: 180_000, volume: 50,
+    ...mudancas,
+  });
+
+  it("tocando: espera o fim da música (com folga), sem passar do teto", () => {
+    expect(proximaConsulta(faixa({ progresso_ms: 170_000 }))).toBe(10_000 + CONSULTA.folga);
+    expect(proximaConsulta(faixa({ progresso_ms: 0 }))).toBe(CONSULTA.maximo);
+  });
+
+  it("perto do fim não martela o Spotify: respeita o mínimo", () => {
+    expect(proximaConsulta(faixa({ progresso_ms: 179_900 }))).toBe(CONSULTA.minimo);
+    // progresso além da duração (a faixa já trocou e o Spotify ainda não disse)
+    expect(proximaConsulta(faixa({ progresso_ms: 200_000 }))).toBe(CONSULTA.minimo);
+  });
+
+  it("pausada, nada tocando ou duração desconhecida: intervalo fixo", () => {
+    expect(proximaConsulta(faixa({ tocando: false }))).toBe(CONSULTA.parado);
+    expect(proximaConsulta(null)).toBe(CONSULTA.parado);
+    expect(proximaConsulta(faixa({ duracao_ms: 0 }))).toBe(CONSULTA.parado);
+  });
 });
