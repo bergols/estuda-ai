@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { api, dados, type Esquemas } from "./api";
 import { sairPelaPonte } from "./desktop";
+import { lembrarBloqueios } from "./foco/bloqueio";
 import { DESKTOP } from "./plataforma";
 
 /**
@@ -22,6 +23,7 @@ export const chaves = {
   gastos: ["gastos"] as const,
   sessoes: ["sessoes"] as const,
   spotify: ["spotify"] as const,
+  bloqueios: ["bloqueios"] as const,
   analytics: (rota: string, disciplinaId?: number) => ["analytics", rota, disciplinaId ?? "todas"] as const,
 };
 
@@ -350,6 +352,31 @@ export function useSairDeTodos() {
     mutationFn: async () => {
       await dados(api.POST("/auth/sair-de-todos"));
       await apagarCookie();
+    },
+  });
+}
+
+// ------------------------------------------------------------ bloqueios (fase 7)
+
+/** Também guarda no aparelho: a sessão bloqueia mesmo começando sem internet. */
+export function useBloqueios() {
+  return useQuery({
+    queryKey: chaves.bloqueios,
+    queryFn: async () => {
+      const b = await dados(api.GET("/bloqueios"));
+      lembrarBloqueios(b);
+      return b;
+    },
+  });
+}
+
+export function useSalvarBloqueios() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: (corpo: Esquemas["Bloqueios"]) => dados(api.PUT("/bloqueios", { body: corpo })),
+    onSuccess: (b) => {
+      lembrarBloqueios(b);
+      cliente.setQueryData(chaves.bloqueios, b);
     },
   });
 }

@@ -15,6 +15,7 @@ import {
   encerrarAposFechamento,
   novaSessao,
   pausarSessao,
+  registrarEvento,
   retomarSessao,
   saiuDaJanela,
   ultimoSinal,
@@ -27,9 +28,11 @@ import { DESKTOP } from "@/lib/plataforma";
 
 import { NOMES_METODO, Configuracao, type Escolha } from "./configuracao";
 import { Historico } from "./historico";
+import { ConfigBloqueios } from "./bloqueios";
 import { Musica } from "./musica";
 import { RodapeSincronia } from "./rodape-sincronia";
 import { TelaDeFoco } from "./tela-de-foco";
+import { useBloqueio } from "./usar-bloqueio";
 import { useMusica, usePlayer } from "./usar-musica";
 import { novaChave, useRelogio, useSessao, useSituacaoSincronia } from "./usar-sessao";
 
@@ -50,6 +53,9 @@ function FocoWeb() {
       </Secao>
       <Secao titulo="Música (Spotify)">
         <Musica />
+      </Secao>
+      <Secao titulo="Bloqueios">
+        <ConfigBloqueios />
       </Secao>
     </>
   );
@@ -74,6 +80,7 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
   const musica = useMusica();
   const ativa = sessao?.dados.status === "em_andamento";
   const player = usePlayer(ativa, musica.conectado, musica.setAviso);
+  const bloqueio = useBloqueio(ativa, sessao, mudar, sistema);
 
   // A música de cada momento. A sessão atual fica numa ref para o callback do relógio
   // ser estável (senão o intervalo de 250 ms reiniciaria a cada render).
@@ -146,6 +153,7 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
         sincronia={sincronia}
         player={player}
         avisoMusica={musica.aviso}
+        bloqueio={bloqueio}
         aoPausar={() => {
           mudar((s) => pausarSessao(s, Date.now()));
           musicaEm({ tipo: "pausa_manual" });
@@ -158,6 +166,11 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
           mudar((s) => encerrar(s, Date.now(), novaChave));
           musicaEm({ tipo: "fim" });
         }}
+        aoSairEmergencia={(esperouS) => {
+          const t = Date.now();
+          mudar((s) => encerrar(registrarEvento(s, "saida_emergencia", t, novaChave, `esperou ${esperouS} s`), t, novaChave));
+          musicaEm({ tipo: "fim" });
+        }}
       />
     );
   }
@@ -165,6 +178,7 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
   return (
     <>
       <Cabecalho titulo="Foco" acoes={<RodapeSincronia situacao={sincronia} />} />
+      {bloqueio.travado && <BloqueioTravado aoDesbloquear={bloqueio.desbloquear} />}
       {erroAoGravar && (
         <p role="alert" className="mb-6 border-l-2 border-errado bg-alerta px-4 py-3 text-sm">
           Não consegui gravar a sessão no computador: {erroAoGravar}
@@ -197,10 +211,40 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
         <Musica />
       </Secao>
 
+      <Secao titulo="Bloqueios">
+        <ConfigBloqueios />
+      </Secao>
+
       <Secao titulo="Últimas sessões">
         <Historico />
       </Secao>
     </>
+  );
+}
+
+/** O bloqueio de sites ficou e o guardião não respondeu: desbloquear pede a senha. */
+function BloqueioTravado({ aoDesbloquear }: { aoDesbloquear: () => Promise<void> }) {
+  const [erro, setErro] = useState<string | null>(null);
+  const [indo, setIndo] = useState(false);
+  return (
+    <div role="alert" className="mb-6 border-l-2 border-errado bg-alerta px-4 py-3 text-sm">
+      <p className="mb-2">
+        Os sites da sua lista continuam bloqueados e o guardião do bloqueio não respondeu. Desbloquear pede a senha
+        do computador.
+      </p>
+      {erro && <p className="mb-2">Não deu certo: {erro}</p>}
+      <Botao
+        variante="secundario"
+        carregando={indo}
+        onClick={() => {
+          setIndo(true);
+          setErro(null);
+          aoDesbloquear().catch((e) => setErro(String(e))).finally(() => setIndo(false));
+        }}
+      >
+        Desbloquear agora
+      </Botao>
+    </div>
   );
 }
 
