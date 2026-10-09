@@ -338,9 +338,14 @@ $Dominios = @(@DOMINIOS@)
 
 function Caminho($nome) { Join-Path $Estado $nome }
 
+# Byte a byte, em .NET puro: o hosts tem poucos KB, e nada depende de módulo do PowerShell
 function Iguais($a, $b) {
-  (Test-Path -LiteralPath $a) -and (Test-Path -LiteralPath $b) -and
-    ((Get-FileHash -LiteralPath $a).Hash -eq (Get-FileHash -LiteralPath $b).Hash)
+  if (-not ((Test-Path -LiteralPath $a) -and (Test-Path -LiteralPath $b))) { return $false }
+  $x = [IO.File]::ReadAllBytes($a)
+  $y = [IO.File]::ReadAllBytes($b)
+  if ($x.Length -ne $y.Length) { return $false }
+  for ($i = 0; $i -lt $x.Length; $i++) { if ($x[$i] -ne $y[$i]) { return $false } }
+  return $true
 }
 
 function Limpar-Cache {
@@ -707,10 +712,11 @@ mod testes {
         let mut g = guardiao(std::path::Path::new("/tmp/a'b"));
         g.dominios = vec!["x.com".into()];
         let s = g.script_sh();
-        assert!(s.contains(r"HOSTS='/tmp/a'\''b/hosts'"));
+        assert!(s.contains(&format!("HOSTS={}", aspas_sh(&g.hosts))));
+        assert!(s.contains(r"a'\''b"));
         assert!(!s.contains("@HOSTS@") && !s.contains("@DOMINIOS@"));
         let ps = g.script_ps();
-        assert!(ps.contains("$Hosts = '/tmp/a''b/hosts'"));
+        assert!(ps.contains(&format!("$Hosts = {}", aspas_ps(&g.hosts))) && ps.contains("a''b"));
         for marcador in [
             "@HOSTS@",
             "@ESTADO@",
@@ -949,6 +955,9 @@ mod testes {
 
         fn ps(script: &std::path::Path) -> Command {
             let mut c = Command::new("powershell.exe");
+            // O cargo do CI roda dentro do PowerShell 7, e o 5 herdaria o PSModulePath dele
+            // (não carregaria nem os próprios módulos). O app faz o mesmo.
+            c.env_remove("PSModulePath");
             c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
                 .arg(script);
             c

@@ -128,6 +128,9 @@ fn como_administrador(g: &Guardiao, so_restaurar: bool) -> Result<(), String> {
     );
     let saida = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", &iniciar])
+        // Aberto a partir do PowerShell 7, o 5 herdaria o PSModulePath dele e não
+        // carregaria os próprios módulos: sem a variável, ele usa a dele
+        .env_remove("PSModulePath")
         .creation_flags(SEM_JANELA)
         .output()
         .map_err(|e| e.to_string())?;
