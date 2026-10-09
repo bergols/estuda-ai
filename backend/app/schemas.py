@@ -5,12 +5,14 @@ ser violadas (unicidade, FKs, CHECKs) continuam no Postgres: a API é a
 primeira linha de defesa, o banco é a última.
 """
 
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
+    AfterValidator,
     AwareDatetime,
     BaseModel,
     ConfigDict,
@@ -574,3 +576,43 @@ class PlaylistDoSpotify(BaseModel):
     nome: str
     dono: str | None
     imagem: str | None
+
+
+# ------------------------------------------------------------- bloqueios (fase 7)
+
+_DOMINIO = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+
+
+def _normalizar_dominio(valor: str) -> str:
+    """Aceita o que se cola da barra do navegador ("https://www.YouTube.com/watch?v=x")
+    e guarda só o domínio ("youtube.com"). O www volta na hora de bloquear (o app
+    bloqueia os dois). A regra final é a mesma do CHECK do banco."""
+    d = valor.strip().lower()
+    d = re.sub(r"^[a-z][a-z0-9+.-]*://", "", d)  # esquema
+    d = re.split(r"[/?#:]", d, maxsplit=1)[0]  # caminho, busca, porta
+    d = d.removeprefix("www.").rstrip(".")
+    if len(d) > 253 or not _DOMINIO.match(d):
+        raise ValueError(f"domínio inválido: {valor!r}")
+    return d
+
+
+Dominio = Annotated[str, AfterValidator(_normalizar_dominio)]
+NomePrograma = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100, pattern=r"^[^/\\\x00-\x1f\x7f]+$"),
+]
+
+
+class ProgramasPorSistema(BaseModel):
+    """O nome do programa muda com o sistema: "Discord" no Mac, "Discord.exe" no Windows."""
+
+    macos: list[NomePrograma] = Field(default=[], max_length=100)
+    windows: list[NomePrograma] = Field(default=[], max_length=100)
+
+
+class Bloqueios(BaseModel):
+    bloquear_sites: bool = False
+    bloquear_programas: bool = False
+    espera_emergencia_s: int = Field(default=60, ge=10, le=600)
+    sites: list[Dominio] = Field(default=[], max_length=200)
+    programas: ProgramasPorSistema = ProgramasPorSistema()

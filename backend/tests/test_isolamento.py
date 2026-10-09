@@ -29,7 +29,9 @@ from app.models import (
     Questao,
     Revisao,
     PreferenciasFoco,
+    ProgramaBloqueado,
     SessaoEstudo,
+    SiteBloqueado,
     SpotifyConta,
     SpotifyPlaylist,
     Tentativa,
@@ -86,7 +88,11 @@ def vitima(session, outro_usuario, usuario):
         access_expira_em=agora + timedelta(hours=1)))
     session.add(SpotifyPlaylist(usuario_id=outro_usuario.id, alvo="disciplina", disciplina_id=d.id,
                                 uri="spotify:playlist:37i9dQZF1DX8Uebhn9wzrS", nome="Playlist secreta"))
-    session.add(PreferenciasFoco(usuario_id=outro_usuario.id, spotify_no_intervalo="trocar"))
+    session.add(PreferenciasFoco(usuario_id=outro_usuario.id, spotify_no_intervalo="trocar",
+                                 bloquear_sites=True, espera_emergencia_s=300))
+    # Bloqueios da vítima (sessão 4): os mesmos valores que o atacante vai salvar
+    session.add(SiteBloqueado(usuario_id=outro_usuario.id, dominio="segredo-da-vitima.com"))
+    session.add(ProgramaBloqueado(usuario_id=outro_usuario.id, sistema="macos", nome="Segredo"))
     # disciplina do PRÓPRIO atacante, para os casos "misturados"
     propria = Disciplina(usuario_id=usuario.id, nome="Minha")
     session.add(propria)
@@ -196,6 +202,9 @@ CASOS_LISTAS = [
     ("GET", "/spotify/config", _sem_texto_secreto),
     ("DELETE", "/spotify", lambda r: None),  # apaga só a do próprio (conferido abaixo)
     ("POST", "/spotify/conectar", lambda r: _conectou_a_propria(r.json())),
+    ("GET", "/bloqueios", lambda r: _bloqueios_padrao(r.json())),
+    # Mesmo domínio e programa da vítima: viram linhas do atacante (UNIQUE por usuário)
+    ("PUT", "/bloqueios", lambda r: _bloqueios_proprios(r.json())),
     # As respostas da vítima (revisão e tentativa de 1 h atrás, logo depois da sessão
     # dela) não podem aparecer em grupo nenhum
     ("GET", "/analytics/foco/acerto-pos-sessao",
@@ -210,6 +219,16 @@ CASOS_LISTAS = [
 def _spotify_vazio(estado):
     assert (estado["conectado"], estado["nome"], estado["playlists"]) == (False, None, [])
     assert estado["no_intervalo"] == "pausar"  # o padrão, não o "trocar" da vítima
+
+
+def _bloqueios_padrao(b):
+    assert b == {"bloquear_sites": False, "bloquear_programas": False, "espera_emergencia_s": 60,
+                 "sites": [], "programas": {"macos": [], "windows": []}}
+
+
+def _bloqueios_proprios(b):
+    assert b["sites"] == ["segredo-da-vitima.com"] and b["programas"]["macos"] == ["Segredo"]
+    assert b["espera_emergencia_s"] == 60  # o padrão, não os 300 da vítima
 
 
 def _conectou_a_propria(estado):
@@ -232,6 +251,8 @@ def _corpo_da_rota(metodo, caminho, vitima):
             "status": "abandonada", "iniciada_em": "2026-10-08T10:00:00+00:00",
             "terminada_em": "2026-10-08T10:05:00+00:00",
         }]}}
+    if (metodo, caminho) == ("PUT", "/bloqueios"):
+        return {"json": {"sites": ["segredo-da-vitima.com"], "programas": {"macos": ["Segredo"]}}}
     if (metodo, caminho) == ("POST", "/spotify/conectar"):
         return {"json": {"code": "codigo-bom", "code_verifier": "v" * 43,
                          "redirect_uri": "http://127.0.0.1:43821/callback"}}
@@ -280,7 +301,12 @@ def test_nada_da_vitima_mudou(client, headers, vitima, session, outro_usuario):
     assert session.get(SpotifyConta, outro_usuario.id) is not None
     assert session.scalar(text("SELECT count(*) FROM spotify_playlists WHERE usuario_id = :u"),
                           {"u": outro_usuario.id}) == 1
-    assert session.get(PreferenciasFoco, outro_usuario.id).spotify_no_intervalo == "trocar"
+    pref = session.get(PreferenciasFoco, outro_usuario.id)
+    assert (pref.spotify_no_intervalo, pref.bloquear_sites, pref.espera_emergencia_s) == ("trocar", True, 300)
+    # os bloqueios da vítima continuam (o PUT do atacante trocou só a lista dele)
+    for tabela in ("sites_bloqueados", "programas_bloqueados"):
+        assert session.scalar(text(f"SELECT count(*) FROM {tabela} WHERE usuario_id = :u"),
+                              {"u": outro_usuario.id}) == 1
     # o "sair de todos" do atacante não derrubou a vítima
     assert client.get("/auth/eu", headers=cabecalho(outro_usuario)).status_code == 200
 

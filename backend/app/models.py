@@ -883,6 +883,15 @@ class PreferenciasFoco(Base):
     spotify_no_intervalo: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="pausar"
     )
+    espera_emergencia_s: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("60")
+    )
+    bloquear_sites: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    bloquear_programas: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     criado_em: Mapped[datetime] = criado_em()
     atualizado_em: Mapped[datetime] = atualizado_em()
 
@@ -890,5 +899,58 @@ class PreferenciasFoco(Base):
         CheckConstraint(
             "spotify_no_intervalo IN ('pausar', 'trocar', 'continuar')",
             name="spotify_no_intervalo_valido",
+        ),
+        CheckConstraint(
+            "espera_emergencia_s BETWEEN 10 AND 600", name="espera_emergencia_valida"
+        ),
+    )
+
+
+# Mesma expressão da migration de bloqueios: rótulos de 1 a 63, TLD só de letras
+DOMINIO_BLOQUEADO = r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+
+
+class SiteBloqueado(Base):
+    """Site bloqueado no modo foco (vai para o arquivo hosts; vale nos dois sistemas)."""
+
+    __tablename__ = "sites_bloqueados"
+
+    id: Mapped[int] = pk()
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    dominio: Mapped[str] = mapped_column(Text, nullable=False)
+    criado_em: Mapped[datetime] = criado_em()
+
+    __table_args__ = (
+        UniqueConstraint("usuario_id", "dominio"),
+        CheckConstraint(
+            f"dominio ~ '{DOMINIO_BLOQUEADO}' AND length(dominio) <= 253", name="dominio_valido"
+        ),
+    )
+
+
+class ProgramaBloqueado(Base):
+    """Programa que o modo foco fecha, por sistema (o nome muda: Discord x Discord.exe)."""
+
+    __tablename__ = "programas_bloqueados"
+
+    id: Mapped[int] = pk()
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    sistema: Mapped[str] = mapped_column(Text, nullable=False)
+    nome: Mapped[str] = mapped_column(Text, nullable=False)
+    criado_em: Mapped[datetime] = criado_em()
+
+    __table_args__ = (
+        CheckConstraint("sistema IN ('macos', 'windows')", name="sistema_valido"),
+        CheckConstraint(
+            r"length(nome) BETWEEN 1 AND 100 AND nome = trim(nome) AND nome !~ '[/\\[:cntrl:]]'",
+            name="nome_valido",
+        ),
+        Index(
+            "uq_programas_bloqueados_usuario_id_sistema_nome",
+            usuario_id, sistema, func.lower(nome), unique=True,
         ),
     )

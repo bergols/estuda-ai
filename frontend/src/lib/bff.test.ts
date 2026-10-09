@@ -11,6 +11,7 @@ describe("allowlist do repasse /api/<caminho>", () => {
     [["gastos"]],
     [["sessoes", "sincronizar"]],
     [["spotify", "token"]],
+    [["bloqueios"]],
     [["auth", "eu"]],
     [["auth", "sair-de-todos"]],
   ])("repassa %j", (partes) => {

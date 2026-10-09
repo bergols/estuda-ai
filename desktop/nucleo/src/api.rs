@@ -17,6 +17,7 @@ const PERMITIDOS: &[&str] = &[
     "gastos",
     "sessoes",
     "spotify",
+    "bloqueios",
 ];
 /// Em /auth, só estes: o login tem comando próprio (entrar), que guarda o token no cofre.
 const AUTH_PERMITIDOS: &[&str] = &["eu", "sair-de-todos"];
@@ -163,6 +164,7 @@ mod testes {
             "gastos",
             "sessoes/sincronizar",
             "spotify/token",
+            "bloqueios",
             "auth/eu",
             "auth/sair-de-todos",
         ] {

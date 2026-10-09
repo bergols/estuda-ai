@@ -10,6 +10,7 @@ from app.db import get_session
 from app.routers import (
     analytics,
     auth,
+    bloqueios,
     busca,
     disciplinas,
     flashcards,
@@ -35,6 +36,7 @@ app.include_router(revisoes.router)
 app.include_router(analytics.router)
 app.include_router(sessoes.router)
 app.include_router(spotify.router)
+app.include_router(bloqueios.router)
 
 
 @app.get("/health")

@@ -44,6 +44,10 @@ ESPERADO = {
     "spotify_contas": DML,
     "spotify_playlists": DML,
     "preferencias_foco": {"SELECT", "INSERT", "UPDATE"},
+    # Bloqueios: a lista é trocada (DELETE do que saiu + INSERT do que entrou); uma
+    # linha nunca muda, então sem UPDATE
+    "sites_bloqueados": {"SELECT", "INSERT", "DELETE"},
+    "programas_bloqueados": {"SELECT", "INSERT", "DELETE"},
     "vw_respostas": {"SELECT"},
     "mv_respostas_diarias": {"SELECT"},
     "atualizacoes_mv": {"SELECT"},

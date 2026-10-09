@@ -334,6 +334,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bloqueios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ler
+         * @description Sites e programas que o modo foco bloqueia, e as preferências do bloqueio.
+         */
+        get: operations["ler_bloqueios_get"];
+        /**
+         * Salvar
+         * @description Troca toda a configuração de bloqueio (numa transação: ou tudo, ou nada).
+         *
+         *     Domínios chegam como se cola do navegador ("https://www.youtube.com/watch") e são
+         *     guardados como domínio ("youtube.com"); repetidos contam uma vez.
+         */
+        put: operations["salvar_bloqueios_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disciplinas": {
         parameters: {
             query?: never;
@@ -893,6 +920,36 @@ export interface components {
             /** Duracao Ms */
             duracao_ms: number;
         };
+        /** Bloqueios */
+        Bloqueios: {
+            /**
+             * Bloquear Programas
+             * @default false
+             */
+            bloquear_programas?: boolean;
+            /**
+             * Bloquear Sites
+             * @default false
+             */
+            bloquear_sites?: boolean;
+            /**
+             * Espera Emergencia S
+             * @default 60
+             */
+            espera_emergencia_s?: number;
+            /**
+             * @default {
+             *       "macos": [],
+             *       "windows": []
+             *     }
+             */
+            programas?: components["schemas"]["ProgramasPorSistema"];
+            /**
+             * Sites
+             * @default []
+             */
+            sites?: string[];
+        };
         /** Body_enviar_material_disciplinas__disciplina_id__materiais_post */
         Body_enviar_material_disciplinas__disciplina_id__materiais_post: {
             /** Arquivo */
@@ -1413,6 +1470,22 @@ export interface components {
              * Format: date
              */
             dia: string;
+        };
+        /**
+         * ProgramasPorSistema
+         * @description O nome do programa muda com o sistema: "Discord" no Mac, "Discord.exe" no Windows.
+         */
+        ProgramasPorSistema: {
+            /**
+             * Macos
+             * @default []
+             */
+            macos?: string[];
+            /**
+             * Windows
+             * @default []
+             */
+            windows?: string[];
         };
         /** QuestaoLer */
         QuestaoLer: {
@@ -2483,6 +2556,59 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ler_bloqueios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bloqueios"];
+                };
+            };
+        };
+    };
+    salvar_bloqueios_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Bloqueios"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bloqueios"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
