@@ -41,7 +41,7 @@ Oracle sair (script `deploy/oracle-criar-vm.sh`). Roadmap no `README.md`.
 **Fase 7** (app desktop, sessões de estudo, Spotify, modo foco) em 4 sessões, plano aprovado:
 (1) app Tauri + login + instaladores, (2) sessões de estudo, SQLite offline com chaves de
 idempotência, analytics de foco e (3) Spotify (PKCE, refresh token cifrado na aplicação com
-AES-GCM, não pgcrypto) **concluídas**; (4) bloqueio de programas e de sites (hosts, com
+AES-GCM, não pgcrypto) **concluídas**; (3b) atualização automática **concluída**; (4) bloqueio de programas e de sites (hosts, com
 restauração garantida) e saída de emergência. Decisões já tomadas pelo autor: o desktop
 fala com o **BFF da Vercel** (não direto com a API); a sessão de estudo roda só no desktop
 (a web mostra painel/histórico).
@@ -297,8 +297,14 @@ Detalhes e o porquê em `docs/modo-foco.md`.
   Spotify real: `SpotifyFalso` (backend, `httpx.MockTransport`) e `mockito` (Rust). Redirect fixo
   `http://127.0.0.1:43821/callback`; nunca `localhost`, nunca escutar em 0.0.0.0.
 - Instaladores: `.github/workflows/desktop.yml`, só por tag `desktop-v<versão do
-  tauri.conf.json>` (Release em rascunho) ou "Run workflow". Não rode a cada push: minuto
-  de macOS custa 10x na cota do repositório privado.
+  tauri.conf.json>` ou "Run workflow". A tag **publica** a Release com o `latest.json`, e
+  todo app instalado (0.3.3+) se atualiza sozinho: tag = entrega. Repositório público desde
+  a 0.3.3 (minutos grátis).
+- Atualização automática (`src-tauri/src/atualizacao.rs`, regras em
+  `frontend/src/lib/atualizacao.ts`): pacotes assinados com `~/.tauri/estuda-ai.key` (senha no
+  Keychain, item `estuda-ai-updater-senha`; cópias nos secrets `TAURI_SIGNING_PRIVATE_KEY*`).
+  Perder a chave = apps instalados recusam atualizações. Build local precisa da chave no
+  ambiente (comando em `docs/modo-foco.md`, 5b); nunca imprima a chave nem a senha.
 
 ## Produção (fase 6)
 

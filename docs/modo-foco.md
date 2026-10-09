@@ -384,8 +384,9 @@ Erro de música **nunca** interrompe a sessão: o timer segue, e a tela mostra o
 
 O workflow `.github/workflows/desktop.yml` monta os dois numa matriz (macOS + Windows):
 
-- **tag `desktop-v0.1.0`:** cria uma **Release em rascunho** com os instaladores. Você
-  confere e publica;
+- **tag `desktop-v0.1.0`:** **publica** uma Release com os instaladores e o `latest.json`
+  da atualização automática (seção 5b). Até a 0.3.2 era rascunho; agora publicar a tag é
+  entregar a versão a todo app instalado;
 - **botão "Run workflow"** (aba Actions → Desktop): só gera os instaladores como
   artefatos da execução.
 
@@ -406,13 +407,66 @@ gh run download <id da execução> -R bergols/estuda-ai -D instaladores
 gh release create desktop-v<versão> instaladores/*/*.dmg instaladores/*/*-setup.exe instaladores/*/*.msi -R bergols/estuda-ai --draft --verify-tag
 ```
 
-**Por que não a cada push?** O repositório é privado. No plano grátis, o GitHub dá
-2.000 minutos por mês, mas um minuto de macOS conta como 10 e um de Windows como 2. Um
-build universal do Mac leva cerca de 15 minutos no CI (~150 da cota). Por isso, a cada
-push, o `ci.yml` só faz o que é barato em Linux: a exportação estática (fácil de quebrar
-sem perceber) e `fmt`/`clippy`/testes do crate `nucleo`. O `nucleo` não depende do Tauri,
-então compila sem o WebKit do Linux. Os testes do app inteiro rodam no `desktop.yml`,
-no próprio Windows e macOS.
+**Por que não a cada push?** Até a 0.3.2 o motivo era a cota: com o repositório privado,
+um minuto de macOS contava como 10, e um build universal leva ~15 minutos. Com o
+repositório público os minutos são grátis, mas o motivo que sobra é mais forte: cada tag
+vira uma versão que os apps instalados baixam sozinhos. Versão nova é decisão, não efeito
+colateral de um push. A cada push, o `ci.yml` faz só a exportação estática (fácil de
+quebrar sem perceber) e `fmt`/`clippy`/testes do crate `nucleo`, que não depende do Tauri e
+compila sem o WebKit do Linux. Os testes do app inteiro rodam no `desktop.yml`, no próprio
+Windows e macOS.
+
+## 5b. Atualização automática
+
+Desde a 0.3.3 o app se atualiza sozinho (`tauri-plugin-updater`). A 0.3.3 é a última que
+você instala na mão.
+
+**Como funciona:**
+
+1. O app lê `https://github.com/bergols/estuda-ai/releases/latest/download/latest.json`
+   (`plugins.updater` no `tauri.conf.json`). `releases/latest` é a Release publicada mais
+   recente; rascunhos não contam.
+2. Se a versão do json for maior que a dele, baixa o pacote: no macOS o `.app.tar.gz`
+   (universal, serve às duas arquiteturas), no Windows o `-setup.exe`, que roda em modo
+   `passive` (só uma barra de progresso, sem perguntas).
+3. **Antes de instalar, confere a assinatura** do pacote com a chave pública embutida no
+   app. Só depois instala e reinicia.
+
+**Por que assinar, se o download já é HTTPS?** O HTTPS garante que você está falando com o
+GitHub, não que o arquivo é o que o CI gerou. Quem conseguisse subir um arquivo na Release
+(um token vazado, uma Action comprometida) entregaria um programa qualquer a todo app
+instalado, e um atualizador automático é exatamente o lugar onde isso faria mais estrago.
+A assinatura separa "poder publicar" de "poder assinar". A chave privada nunca entra no
+repositório: fica nos *secrets* do GitHub (`TAURI_SIGNING_PRIVATE_KEY` e
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) e no seu Mac (`~/.tauri/estuda-ai.key`, com a senha no
+Keychain, item `estuda-ai-updater-senha`). É a mesma ideia da `CIFRA_CHAVES` do Spotify,
+com outro tipo de chave: lá a chave cifra (é simétrica, a mesma abre e fecha); aqui a chave
+assina, e é assimétrica (Ed25519, via minisign). O app só precisa da metade pública, que
+não deixa assinar nada.
+
+> **Guarde uma cópia da chave privada** (gerenciador de senhas, por exemplo). Sem ela, a
+> próxima versão não pode ser assinada com a mesma chave, e os apps instalados recusam a
+> atualização: seria preciso reinstalar na mão em todo computador.
+
+**Quando instala** (regras puras em `frontend/src/lib/atualizacao.ts`, com testes):
+
+| Situação | O que acontece |
+|---|---|
+| Achou nos primeiros 15 s depois de abrir, sem sessão aberta | instala sozinho (tela "Atualizando…") e reinicia |
+| Sessão de estudo aberta (inclusive uma que ficou aberta depois de travar) | só avisa, numa faixa no topo |
+| Achou com o app aberto há tempo (verifica a cada 6 h) | só avisa: reiniciar no meio de uma resposta perderia o texto |
+| Sem internet ou GitHub fora do ar | nada; tenta de novo depois |
+
+O `latest.json` é montado pelo job `release` com `jq`: a assinatura vai **dentro** dele (o
+conteúdo do `.sig`), junto com a URL do pacote. Em build de desenvolvimento (`tauri dev`) o
+app nunca verifica: ele não pode se substituir pelo instalador da Release.
+
+**Build local** (o `.dmg` que vai pelo chat): com `createUpdaterArtifacts`, o `tauri build`
+exige a chave. Rode com ela no ambiente:
+
+```bash
+TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/estuda-ai.key)" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -a estuda-ai -s estuda-ai-updater-senha -w)" npm --prefix desktop run build -- --target universal-apple-darwin
+```
 
 ## 6. Instalar sem assinatura de código
 
