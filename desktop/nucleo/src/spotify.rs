@@ -144,6 +144,38 @@ pub fn escolher_dispositivo<'a>(
         .copied()
 }
 
+// --------------------------------------------------------------- aleatório
+
+/// O id de uma playlist a partir da URI (`spotify:playlist:<id>`). Álbum e artista
+/// não têm posição inicial aleatória: começam do jeito do Spotify e o aleatório vale
+/// a partir da 2a faixa.
+pub fn id_da_playlist(uri: &str) -> Option<&str> {
+    uri.strip_prefix("spotify:playlist:")
+        .filter(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric()))
+}
+
+/// O `total` de faixas de uma resposta paginada do Spotify (`{"total": 42, ...}`).
+pub fn total_de_faixas(corpo: &str) -> Option<u32> {
+    #[derive(Deserialize)]
+    struct Pagina {
+        total: u32,
+    }
+    serde_json::from_str::<Pagina>(corpo).ok().map(|p| p.total)
+}
+
+/// Em que faixa começar. Ligar o aleatório (shuffle) não basta: tocando uma playlist
+/// pela API, o Spotify começa SEMPRE pela 1a faixa, e só embaralha da 2a em diante.
+/// Toda sessão começaria com a mesma música. Por isso o app escolhe a posição inicial
+/// (`offset` no play) com um número aleatório do sistema. `None` = sem escolha (0 ou
+/// 1 faixa, ou total desconhecido).
+pub fn posicao_inicial(total: Option<u32>, aleatorio: u32) -> Option<u32> {
+    match total {
+        // O viés do módulo é desprezível: playlists têm centenas de faixas, não bilhões
+        Some(n) if n > 1 => Some(aleatorio % n),
+        _ => None,
+    }
+}
+
 // ------------------------------------------------------------------- erros
 
 /// Erro do player já classificado: a tela mostra a mensagem certa para cada caso.
@@ -220,6 +252,40 @@ pub fn classificar(status: u16, corpo: &str, retry_after: Option<&str>) -> ErroP
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn id_da_playlist_so_aceita_playlist_valida() {
+        assert_eq!(
+            id_da_playlist("spotify:playlist:37i9dQZF1DX8Uebhn9wzrS"),
+            Some("37i9dQZF1DX8Uebhn9wzrS")
+        );
+        assert_eq!(id_da_playlist("spotify:album:37i9dQZF1DX8Uebhn9wzrS"), None);
+        assert_eq!(id_da_playlist("spotify:playlist:"), None);
+        // Nada que mude o caminho da URL (/playlists/<id>/items)
+        assert_eq!(id_da_playlist("spotify:playlist:../me"), None);
+    }
+
+    #[test]
+    fn total_de_faixas_le_a_pagina() {
+        assert_eq!(
+            total_de_faixas(r#"{"href":"x","items":[{}],"total":42}"#),
+            Some(42)
+        );
+        assert_eq!(total_de_faixas(r#"{"items":[]}"#), None);
+        assert_eq!(total_de_faixas("não é json"), None);
+    }
+
+    #[test]
+    fn posicao_inicial_sempre_dentro_da_playlist() {
+        for aleatorio in [0, 1, 41, 42, 43, u32::MAX] {
+            let p = posicao_inicial(Some(42), aleatorio).unwrap();
+            assert!(p < 42);
+        }
+        assert_eq!(posicao_inicial(Some(42), 43), Some(1));
+        assert_eq!(posicao_inicial(Some(1), 7), None);
+        assert_eq!(posicao_inicial(Some(0), 7), None);
+        assert_eq!(posicao_inicial(None, 7), None);
+    }
 
     #[test]
     fn challenge_bate_com_o_exemplo_da_rfc_7636() {

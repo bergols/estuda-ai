@@ -342,6 +342,24 @@ Toca no **Spotify deste computador** (dispositivo do tipo *Computer*, de prefer�
 máquina), nunca no celular ou na caixa de som. As regras ficam em `frontend/src/lib/foco/musica.ts` e
 `desktop/nucleo/src/spotify.rs`, ambas testadas sem rede.
 
+### Sempre em ordem aleatória
+
+Ligar o aleatório (`PUT /me/player/shuffle`) **não basta**: tocando uma playlist pela API,
+o Spotify começa sempre pela 1ª faixa e só embaralha da 2ª em diante, e toda sessão abriria
+com a mesma música. Então o app:
+
+1. pergunta quantas faixas a playlist tem (`GET /playlists/{id}/items?limit=1&fields=total`,
+   o caminho de 2026; o antigo `/tracks` fica de reserva);
+2. sorteia a posição inicial com o gerador aleatório do sistema e manda no play
+   (`"offset": {"position": n}`);
+3. liga o shuffle **depois** do play (aí o dispositivo já está ativo e o shuffle vale para a
+   playlist que está tocando).
+
+Sem o total (álbum, artista, erro), toca normalmente, liga o shuffle e pula para a próxima,
+que já sai embaralhada. Falhar no shuffle não interrompe nada: a música já está tocando. As
+regras (`id_da_playlist`, `total_de_faixas`, `posicao_inicial`) estão em
+`desktop/nucleo/src/spotify.rs`, com testes.
+
 ### O player na tela de foco
 
 A tela mostra a capa, a música e os controles (anterior, tocar/pausar, próxima, volume). Para

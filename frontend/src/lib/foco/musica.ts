@@ -69,7 +69,7 @@ export function acaoMusical(
       }
       if (voltouAoFoco) {
         if (noIntervalo === "pausar") return { tipo: "retomar" };
-        // Trocou para a do intervalo: volta para a do foco (do começo da playlist)
+        // Trocou para a do intervalo: volta para a do foco (numa faixa sorteada, ver spotify.rs)
         if (noIntervalo === "trocar") return foco ? { tipo: "tocar", uri: foco } : { tipo: "pausar" };
         return { tipo: "nada" };
       }

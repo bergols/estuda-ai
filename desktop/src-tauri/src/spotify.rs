@@ -215,8 +215,18 @@ impl Player {
             }
             Err(e) => return Err(e),
         };
+        // Começa numa faixa aleatória (ver regras::posicao_inicial)
+        let posicao = match regras::id_da_playlist(contexto) {
+            Some(playlist) => {
+                regras::posicao_inicial(self.total_de_faixas(fonte, playlist).await, aleatorio())
+            }
+            None => None,
+        };
         let caminho = format!("/me/player/play?device_id={id}");
-        let corpo = json!({ "context_uri": contexto });
+        let corpo = match posicao {
+            Some(p) => json!({ "context_uri": contexto, "offset": { "position": p } }),
+            None => json!({ "context_uri": contexto }),
+        };
         match self
             .chamar(fonte, reqwest::Method::PUT, &caminho, Some(&corpo))
             .await
@@ -227,11 +237,55 @@ impl Player {
                 self.chamar(fonte, reqwest::Method::PUT, "/me/player", Some(&transferir))
                     .await?;
                 self.chamar(fonte, reqwest::Method::PUT, &caminho, Some(&corpo))
-                    .await
-                    .map(|_| ())
+                    .await?;
             }
-            r => r.map(|_| ()),
+            r => {
+                r?;
+            }
         }
+        // Aleatório DEPOIS do play: o shuffle vale para o contexto que está tocando, e
+        // aí o dispositivo já está ativo. Falhar aqui não estraga a sessão (a música já
+        // está tocando), então o erro é ignorado.
+        let _ = self
+            .chamar(
+                fonte,
+                reqwest::Method::PUT,
+                &format!("/me/player/shuffle?state=true&device_id={id}"),
+                None,
+            )
+            .await;
+        // Sem posição escolhida (álbum, artista, total desconhecido), a 1a faixa seria
+        // sempre a mesma: pula para a próxima, que já sai do embaralhamento.
+        if posicao.is_none() {
+            let _ = self
+                .chamar(
+                    fonte,
+                    reqwest::Method::POST,
+                    &format!("/me/player/next?device_id={id}"),
+                    None,
+                )
+                .await;
+        }
+        Ok(())
+    }
+
+    /// Quantas faixas a playlist tem. Desde 2026 o caminho é `/playlists/{id}/items`; o
+    /// antigo `/tracks` fica de reserva. Pede só o campo `total` (1 faixa, não a lista).
+    /// `None` em qualquer erro: sem o total, o app só não escolhe a faixa inicial.
+    async fn total_de_faixas(&self, fonte: &dyn FonteToken, playlist: &str) -> Option<u32> {
+        for recurso in ["items", "tracks"] {
+            let caminho = format!("/playlists/{playlist}/{recurso}?limit=1&fields=total");
+            match self
+                .chamar(fonte, reqwest::Method::GET, &caminho, None)
+                .await
+            {
+                Ok((_, corpo)) => return regras::total_de_faixas(&corpo),
+                // Limite: não gasta outra chamada (o play vai esperar do mesmo jeito)
+                Err(ErroPlayer::Limite { .. }) => return None,
+                Err(_) => continue,
+            }
+        }
+        None
     }
 
     async fn esperar_dispositivo(
@@ -548,6 +602,12 @@ fn esperar_retorno(ouvinte: TcpListener, state: &str, prazo: Duration) -> Result
     }
 }
 
+/// Número aleatório do sistema (o mesmo gerador do PKCE). Sem ele, 0: começa da 1a.
+fn aleatorio() -> u32 {
+    let mut bytes = [0u8; 4];
+    getrandom::fill(&mut bytes).map_or(0, |_| u32::from_le_bytes(bytes))
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
@@ -604,6 +664,88 @@ mod testes {
             .await
             .unwrap();
         play.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn playlist_comeca_em_faixa_aleatoria_e_liga_o_shuffle() {
+        let mut s = mockito::Server::new_async().await;
+        s.mock("GET", "/me/player/devices")
+            .with_body(DISPOSITIVOS)
+            .create_async()
+            .await;
+        // O caminho novo (items) falha; o antigo (tracks) responde
+        s.mock("GET", "/playlists/abc/items?limit=1&fields=total")
+            .with_status(404)
+            .create_async()
+            .await;
+        s.mock("GET", "/playlists/abc/tracks?limit=1&fields=total")
+            .with_body(r#"{"total":40}"#)
+            .create_async()
+            .await;
+        let play = s
+            .mock("PUT", "/me/player/play?device_id=mac")
+            .match_body(mockito::Matcher::Regex(
+                r#"^\{"context_uri":"spotify:playlist:abc","offset":\{"position":([0-9]|[1-3][0-9])\}\}$"#.to_owned(),
+            ))
+            .with_status(204)
+            .create_async()
+            .await;
+        let shuffle = s
+            .mock("PUT", "/me/player/shuffle?state=true&device_id=mac")
+            .with_status(204)
+            .create_async()
+            .await;
+        let pular = s
+            .mock("POST", "/me/player/next?device_id=mac")
+            .expect(0) // já começou numa faixa sorteada: não pula
+            .create_async()
+            .await;
+        Player::com_base(&s.url(), "MacBook")
+            .tocar(
+                &fonte(&["t"]),
+                "spotify:playlist:abc",
+                &|| {},
+                Duration::ZERO,
+            )
+            .await
+            .unwrap();
+        play.assert_async().await;
+        shuffle.assert_async().await;
+        pular.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn sem_total_liga_o_shuffle_e_pula_a_primeira() {
+        let mut s = mockito::Server::new_async().await;
+        s.mock("GET", "/me/player/devices")
+            .with_body(DISPOSITIVOS)
+            .create_async()
+            .await;
+        let play = s
+            .mock("PUT", "/me/player/play?device_id=mac")
+            .match_body(mockito::Matcher::Json(
+                json!({"context_uri": "spotify:album:xyz"}),
+            ))
+            .with_status(204)
+            .create_async()
+            .await;
+        let shuffle = s
+            .mock("PUT", "/me/player/shuffle?state=true&device_id=mac")
+            .with_status(204)
+            .create_async()
+            .await;
+        let pular = s
+            .mock("POST", "/me/player/next?device_id=mac")
+            .with_status(204)
+            .create_async()
+            .await;
+        Player::com_base(&s.url(), "MacBook")
+            .tocar(&fonte(&["t"]), "spotify:album:xyz", &|| {}, Duration::ZERO)
+            .await
+            .unwrap();
+        play.assert_async().await;
+        shuffle.assert_async().await;
+        pular.assert_async().await;
     }
 
     #[tokio::test]
