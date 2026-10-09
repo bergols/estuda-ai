@@ -328,6 +328,19 @@ Lições do diagnóstico (o primeiro login pela Vercel falhou):
 - **Variável nova na Vercel só vale depois de um *Redeploy*.**
 - **O DNS público do Funnel demora a aparecer** (a documentação fala em até 10 minutos;
   aqui foi mais), e religar o Funnel ajudou.
+- **Fechar o app do Tailscale derruba tudo** (web e desktop: "o servidor da API está fora do
+  ar"). Ao reabrir, a configuração do Funnel volta (`tailscale funnel status` mostra "Funnel
+  on" e o teste local dá 200), mas a entrada pública pode NÃO voltar: a Vercel continuou com
+  503 por mais de 5 minutos, e o log do Caddy mostrava que nenhum pedido de fora chegava. O
+  teste local engana, porque o próprio Tailscale atende. O que resolveu (out/2026) foi
+  desligar e religar o Funnel:
+
+```bash
+tailscale funnel --https=443 off && tailscale funnel --bg http://127.0.0.1:8080
+```
+
+  Para conferir de fora, use a própria Vercel: `POST /api/token` com uma senha errada deve
+  dar 401 (a API respondeu), não 503.
 - **Com o Tailscale ligado, `dig @1.1.1.1` no Mac é interceptado** e mostrou resposta
   vazia mesmo depois de o nome já resolver na internet. Para testar o DNS público de
   dentro do Mac, use DNS-over-HTTPS: `curl "https://dns.google/resolve?name=<host>"`.

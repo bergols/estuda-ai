@@ -120,6 +120,11 @@ Armadilhas de ambiente já encontradas:
   injete um `window.__TAURI_INTERNALS__` falso (`invoke`, `transformCallback`) e
   `window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} }` antes de navegar
   (pelo router do Next) até a tela.
+- Produção provisória no Mac: se a Vercel der 503 ("servidor da API fora do ar"), confira se o
+  Tailscale está aberto. Depois de reabrir, o Funnel pode não voltar para quem vem de fora
+  mesmo com "Funnel on": `tailscale funnel --https=443 off && tailscale funnel --bg
+  http://127.0.0.1:8080` (binário em /Applications/Tailscale.app/Contents/MacOS/Tailscale).
+  Teste pela Vercel (POST /api/token com senha errada = 401), nunca do próprio Mac.
 - Sem permissão de Acessibilidade não dá para digitar/clicar no app desktop por script.
   Para ver a janela: id via `CGWindowListCopyWindowInfo` (script Swift) e
   `screencapture -x -o -l <id>`; para testar o fluxo, o teste `--ignored` do `ponte.rs`.
