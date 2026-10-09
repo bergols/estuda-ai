@@ -1,17 +1,18 @@
-# Instaladores do app desktop (Tauri): macOS (.dmg universal) e Windows (.msi e .exe).
+# Instaladores do app desktop (Tauri): macOS (.dmg universal) e Windows (.msi e .exe),
+# mais os pacotes da atualização automática (assinados) e o latest.json que o app lê.
 #
-# NÃO roda a cada push, de propósito. O repositório é privado, e no plano grátis do
-# GitHub um minuto de runner macOS conta como 10 e um de Windows como 2, dentro de
-# 2.000 minutos por mês. Um build universal do Mac leva ~15 min (~150 da cota).
-# A cada push, o ci.yml já testa o núcleo em Linux (barato) e o build estático.
+# NÃO roda a cada push: um build universal do Mac leva ~15 min. O repositório é público
+# (minutos de runner grátis), mas cada tag vira uma versão que os apps instalados baixam
+# sozinhos; versão nova é decisão, não efeito colateral de um push. A cada push, o
+# ci.yml já testa o núcleo em Linux e o build estático.
 #
 # Como disparar:
 #   - Release:  git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
 #     (a tag precisa bater com "version" em desktop/src-tauri/tauri.conf.json) → os
-#     builds geram os instaladores e o job "release" cria uma Release em RASCUNHO com
-#     eles; você confere e publica.
+#     builds geram os instaladores e o job "release" PUBLICA a Release com eles e com o
+#     latest.json. Os apps instalados atualizam ao abrir (docs/modo-foco.md, seção 5b).
 #   - Só testar o build: aba Actions → "Desktop" → "Run workflow" → os instaladores
-#     ficam como artefatos da execução (sem Release).
+#     ficam como artefatos da execução (sem Release, ninguém atualiza).
 name: Desktop
 
 on:
@@ -49,6 +50,10 @@ jobs:
       # Para trocar sem mexer no código: Settings → Secrets and variables → Actions →
       # Variables → ESTUDA_AI_URL. É endereço público, não segredo.
       ESTUDA_AI_URL: ${{ vars.ESTUDA_AI_URL }}
+      # Chave que assina os pacotes da atualização (createUpdaterArtifacts no
+      # tauri.conf.json). O app confere a assinatura com a chave PÚBLICA embutida nele.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v5
@@ -103,6 +108,19 @@ jobs:
           args: ${{ matrix.args }}
           uploadWorkflowArtifacts: true
 
+      # Os pacotes da atualização e as assinaturas (.sig), num artefato próprio: o
+      # release monta o latest.json a partir deles. Falha se faltar algum (sem eles a
+      # Release sairia sem atualização, e ninguém perceberia).
+      - name: Pacotes da atualização
+        uses: actions/upload-artifact@v5
+        with:
+          name: atualizacao-${{ runner.os }}
+          if-no-files-found: error
+          path: |
+            desktop/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+            desktop/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
+            desktop/target/release/bundle/nsis/*-setup.exe.sig
+
   release:
     needs: instaladores
     if: startsWith(github.ref, 'refs/tags/')
@@ -115,28 +133,51 @@ jobs:
         with:
           path: artefatos
 
-      - name: Release em rascunho com os instaladores e o SHA-256 de cada um
+      - name: Release com os instaladores, o SHA-256 e o latest.json
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          versao="${GITHUB_REF_NAME#desktop-v}"
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
           mkdir instaladores
-          find artefatos -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \) \
-            -exec cp {} instaladores/ \;
+          find artefatos -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \
+            -o -name '*.app.tar.gz' -o -name '*.sig' \) -exec cp {} instaladores/ \;
           cd instaladores
           ls -la
+
+          # latest.json: o que o app instalado lê (tauri.conf.json, plugins.updater).
+          # A assinatura vai DENTRO do json (conteúdo do .sig), e o app só instala o
+          # pacote se ela bater com a chave pública dele. O Mac é universal: o mesmo
+          # pacote serve para Apple Silicon e Intel. No Windows, o -setup.exe (NSIS).
+          mac=$(ls *.app.tar.gz)
+          win=$(ls *-setup.exe)
+          jq -n --arg v "$versao" --arg data "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg mac_url "$base/$mac" --rawfile mac_sig "$mac.sig" \
+            --arg win_url "$base/$win" --rawfile win_sig "$win.sig" '
+            { version: $v, notes: "estuda-ai \($v)", pub_date: $data,
+              platforms: {
+                "darwin-aarch64": { url: $mac_url, signature: $mac_sig },
+                "darwin-x86_64":  { url: $mac_url, signature: $mac_sig },
+                "windows-x86_64": { url: $win_url, signature: $win_sig } } }' > latest.json
+          cat latest.json
+
           {
             echo "Instaladores sem assinatura de código paga. Na primeira vez, o macOS"
             echo "(Gatekeeper) e o Windows (SmartScreen) avisam: como abrir em"
             echo "docs/modo-foco.md, seção 6. No Windows, prefira o -setup.exe."
+            echo "Quem já tem o app (0.3.3 ou mais nova) recebe esta versão sozinho."
             echo
             echo "SHA-256:"
             echo '```'
-            sha256sum *
+            sha256sum *.dmg *.msi *-setup.exe
             echo '```'
           } > ../notas.md
+          # Publicada, não rascunho: "releases/latest" (o endereço do latest.json) só
+          # enxerga Releases publicadas. Publicar a tag = entregar a versão.
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --draft \
-              --verify-tag --title "estuda-ai ${GITHUB_REF_NAME#desktop-v}" --notes-file ../notas.md
+            gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --latest \
+              --verify-tag --title "estuda-ai $versao" --notes-file ../notas.md
           fi
