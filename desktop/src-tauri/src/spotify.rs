@@ -97,6 +97,8 @@ pub struct Tocando {
     pub capa: Option<String>,
     pub progresso_ms: u64,
     pub duracao_ms: u64,
+    /// Volume do dispositivo que está tocando (None se ele não deixa mudar)
+    pub volume: Option<u8>,
 }
 
 impl Player {
@@ -279,13 +281,10 @@ impl Player {
 
     /// A música atual (204 = nada tocando).
     pub async fn atual(&self, fonte: &dyn FonteToken) -> Result<Option<Tocando>, ErroPlayer> {
+        // /me/player (estado da reprodução) e não /me/player/currently-playing: traz
+        // também o dispositivo (volume) numa chamada só
         let (status, corpo) = self
-            .chamar(
-                fonte,
-                reqwest::Method::GET,
-                "/me/player/currently-playing",
-                None,
-            )
+            .chamar(fonte, reqwest::Method::GET, "/me/player", None)
             .await?;
         if status == 204 || corpo.trim().is_empty() {
             return Ok(None);
@@ -313,7 +312,36 @@ impl Player {
                 .map(str::to_owned),
             progresso_ms: v["progress_ms"].as_u64().unwrap_or(0),
             duracao_ms: item["duration_ms"].as_u64().unwrap_or(0),
+            volume: if v["device"]["supports_volume"].as_bool().unwrap_or(true) {
+                v["device"]["volume_percent"]
+                    .as_u64()
+                    .map(|x| x.min(100) as u8)
+            } else {
+                None
+            },
         }))
+    }
+
+    /// Próxima música (POST /me/player/next).
+    pub async fn proxima(&self, fonte: &dyn FonteToken) -> Result<(), ErroPlayer> {
+        self.chamar(fonte, reqwest::Method::POST, "/me/player/next", None)
+            .await
+            .map(|_| ())
+    }
+
+    /// Música anterior (POST /me/player/previous).
+    pub async fn anterior(&self, fonte: &dyn FonteToken) -> Result<(), ErroPlayer> {
+        self.chamar(fonte, reqwest::Method::POST, "/me/player/previous", None)
+            .await
+            .map(|_| ())
+    }
+
+    /// Volume de 0 a 100 no dispositivo que está tocando.
+    pub async fn volume(&self, fonte: &dyn FonteToken, percentual: u8) -> Result<(), ErroPlayer> {
+        let caminho = format!("/me/player/volume?volume_percent={}", percentual.min(100));
+        self.chamar(fonte, reqwest::Method::PUT, &caminho, None)
+            .await
+            .map(|_| ())
     }
 }
 
@@ -353,6 +381,31 @@ pub async fn spotify_retomar(
     estado: State<'_, Estado>,
 ) -> Result<(), ErroPlayer> {
     player.retomar(&FonteBff(&estado)).await
+}
+
+#[tauri::command]
+pub async fn spotify_proxima(
+    player: State<'_, Player>,
+    estado: State<'_, Estado>,
+) -> Result<(), ErroPlayer> {
+    player.proxima(&FonteBff(&estado)).await
+}
+
+#[tauri::command]
+pub async fn spotify_anterior(
+    player: State<'_, Player>,
+    estado: State<'_, Estado>,
+) -> Result<(), ErroPlayer> {
+    player.anterior(&FonteBff(&estado)).await
+}
+
+#[tauri::command]
+pub async fn spotify_volume(
+    percentual: u8,
+    player: State<'_, Player>,
+    estado: State<'_, Estado>,
+) -> Result<(), ErroPlayer> {
+    player.volume(&FonteBff(&estado), percentual).await
 }
 
 #[tauri::command]
@@ -578,7 +631,7 @@ mod testes {
     async fn token_recusado_duas_vezes_nao_vira_laco() {
         let mut s = mockito::Server::new_async().await;
         let m = s
-            .mock("GET", "/me/player/currently-playing")
+            .mock("GET", "/me/player")
             .with_status(401)
             .expect(2)
             .create_async()
@@ -632,7 +685,7 @@ mod testes {
     async fn limite_de_taxa_segura_as_proximas_chamadas() {
         let mut s = mockito::Server::new_async().await;
         let m = s
-            .mock("GET", "/me/player/currently-playing")
+            .mock("GET", "/me/player")
             .with_status(429)
             .with_header("retry-after", "30")
             .expect(1)
@@ -692,9 +745,9 @@ mod testes {
     #[tokio::test]
     async fn musica_atual() {
         let mut s = mockito::Server::new_async().await;
-        s.mock("GET", "/me/player/currently-playing")
+        s.mock("GET", "/me/player")
             .with_body(
-                r#"{"is_playing":true,"progress_ms":61000,"item":{"name":"Clair de Lune",
+                r#"{"is_playing":true,"progress_ms":61000,"device":{"volume_percent":65,"supports_volume":true},"item":{"name":"Clair de Lune",
                 "duration_ms":300000,"artists":[{"name":"Debussy"},{"name":"Orq."}],
                 "album":{"images":[{"url":"https://i.scdn.co/capa"}]}}}"#,
             )
@@ -710,12 +763,57 @@ mod testes {
             ("Clair de Lune", "Debussy, Orq.", true)
         );
         assert_eq!(t.capa.as_deref(), Some("https://i.scdn.co/capa"));
+        assert_eq!(t.volume, Some(65));
+    }
+
+    #[tokio::test]
+    async fn proxima_anterior_e_volume() {
+        let mut s = mockito::Server::new_async().await;
+        let prox = s
+            .mock("POST", "/me/player/next")
+            .with_status(204)
+            .create_async()
+            .await;
+        let ant = s
+            .mock("POST", "/me/player/previous")
+            .with_status(204)
+            .create_async()
+            .await;
+        // Acima de 100 é limitado a 100 (o Spotify recusaria)
+        let vol = s
+            .mock("PUT", "/me/player/volume?volume_percent=100")
+            .with_status(204)
+            .create_async()
+            .await;
+        let player = Player::com_base(&s.url(), "Mac");
+        let f = fonte(&["t"]);
+        player.proxima(&f).await.unwrap();
+        player.anterior(&f).await.unwrap();
+        player.volume(&f, 150).await.unwrap();
+        prox.assert_async().await;
+        ant.assert_async().await;
+        vol.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn dispositivo_sem_controle_de_volume() {
+        let mut s = mockito::Server::new_async().await;
+        s.mock("GET", "/me/player")
+            .with_body(r#"{"is_playing":false,"device":{"volume_percent":40,"supports_volume":false},"item":{"name":"x","artists":[]}}"#)
+            .create_async()
+            .await;
+        let t = Player::com_base(&s.url(), "Mac")
+            .atual(&fonte(&["t"]))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!((t.tocando, t.volume), (false, None));
     }
 
     #[tokio::test]
     async fn nada_tocando() {
         let mut s = mockito::Server::new_async().await;
-        s.mock("GET", "/me/player/currently-playing")
+        s.mock("GET", "/me/player")
             .with_status(204)
             .create_async()
             .await;

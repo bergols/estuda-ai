@@ -18,6 +18,7 @@ export type Tocando = {
   capa: string | null;
   progresso_ms: number;
   duracao_ms: number;
+  volume: number | null; // null: o dispositivo não deixa mudar o volume
 };
 
 /** Mensagem para a tela (o erro do Rust já vem classificado). */
@@ -53,3 +54,7 @@ export const tocar = (contexto: string) => invoke<void>("spotify_tocar", { conte
 export const pausar = () => invoke<void>("spotify_pausar");
 export const retomar = () => invoke<void>("spotify_retomar");
 export const atual = () => invoke<Tocando | null>("spotify_atual");
+export const proxima = () => invoke<void>("spotify_proxima");
+export const anterior = () => invoke<void>("spotify_anterior");
+export const volume = (percentual: number) =>
+  invoke<void>("spotify_volume", { percentual: Math.max(0, Math.min(100, Math.round(percentual))) });

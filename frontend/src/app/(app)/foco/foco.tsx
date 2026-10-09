@@ -30,7 +30,7 @@ import { Historico } from "./historico";
 import { Musica } from "./musica";
 import { RodapeSincronia } from "./rodape-sincronia";
 import { TelaDeFoco } from "./tela-de-foco";
-import { useMusica, useMusicaAtual } from "./usar-musica";
+import { useMusica, usePlayer } from "./usar-musica";
 import { novaChave, useRelogio, useSessao, useSituacaoSincronia } from "./usar-sessao";
 
 export function Foco() {
@@ -73,7 +73,7 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
   const [sistema, setSistema] = useState<SessaoEnvio["sistema"]>("macos");
   const musica = useMusica();
   const ativa = sessao?.dados.status === "em_andamento";
-  const tocando = useMusicaAtual(ativa, musica.conectado);
+  const player = usePlayer(ativa, musica.conectado, musica.setAviso);
 
   // A música de cada momento. A sessão atual fica numa ref para o callback do relógio
   // ser estável (senão o intervalo de 250 ms reiniciaria a cada render).
@@ -83,9 +83,12 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
   }, [sessao]);
   const musicaEm = useCallback(
     (momento: Momento, s: SessaoAtiva | null = sessaoAtual.current) => {
-      if (s) musica.executar(momento, { metodo: s.dados.metodo, disciplinaId: s.dados.disciplina_id ?? null });
+      if (s) {
+        musica.executar(momento, { metodo: s.dados.metodo, disciplinaId: s.dados.disciplina_id ?? null },
+          player.atualizar);
+      }
     },
-    [musica],
+    [musica, player.atualizar],
   );
   const musicaRef = useRef(musicaEm);
   useEffect(() => {
@@ -141,7 +144,7 @@ function Painel({ aberta }: { aberta: SessaoAtiva | null }) {
         agora={agora}
         disciplina={nomeDisciplina(sessao.dados.disciplina_id)}
         sincronia={sincronia}
-        musica={tocando}
+        player={player}
         avisoMusica={musica.aviso}
         aoPausar={() => {
           mudar((s) => pausarSessao(s, Date.now()));

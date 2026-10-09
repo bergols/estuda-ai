@@ -18,6 +18,9 @@ const COMANDOS: &[&str] = &[
     "spotify_pausar",
     "spotify_retomar",
     "spotify_atual",
+    "spotify_proxima",
+    "spotify_anterior",
+    "spotify_volume",
 ];
 
 fn main() {

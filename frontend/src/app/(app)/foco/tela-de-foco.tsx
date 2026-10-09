@@ -4,10 +4,10 @@ import { useState } from "react";
 
 import { Botao } from "@/components/ui";
 import type { SituacaoSincronia } from "@/lib/foco/local";
-import type { Tocando } from "@/lib/foco/spotify";
 import { configDe, type SessaoAtiva } from "@/lib/foco/sessao";
 import { focoPlanejadoMs, momento, plano, relogio } from "@/lib/foco/timer";
 
+import { type ControlesPlayer, PlayerMusica } from "./player-musica";
 import { RodapeSincronia } from "./rodape-sincronia";
 
 const NOME_FASE = { foco: "Foco", pausa_curta: "Pausa", pausa_longa: "Pausa longa" } as const;
@@ -22,7 +22,7 @@ export function TelaDeFoco({
   agora,
   disciplina,
   sincronia,
-  musica,
+  player,
   avisoMusica,
   aoPausar,
   aoRetomar,
@@ -32,7 +32,7 @@ export function TelaDeFoco({
   agora: number;
   disciplina: string | null;
   sincronia: SituacaoSincronia | null;
-  musica: Tocando | null;
+  player: ControlesPlayer;
   avisoMusica: string | null;
   aoPausar: () => void;
   aoRetomar: () => void;
@@ -72,14 +72,7 @@ export function TelaDeFoco({
         <p className="text-sm text-apagado">
           {disciplina ?? "Sem disciplina"} · {relogio(m.focoCumpridoMs)} de foco de {relogio(focoPlanejadoMs(config))}
         </p>
-        {musica && (
-          <p className={`max-w-xl truncate text-sm ${musica.tocando ? "text-tinta" : "text-apagado"}`} aria-live="polite">
-            <span aria-hidden className="mr-2 text-acento">♪</span>
-            {musica.musica}
-            {musica.artistas && <span className="text-apagado"> · {musica.artistas}</span>}
-            {!musica.tocando && <span className="text-apagado"> (pausada)</span>}
-          </p>
-        )}
+        <PlayerMusica player={player} />
         {avisoMusica && (
           <p role="status" className="max-w-xl border-l-2 border-errado bg-alerta px-3 py-2 text-left text-sm">
             {avisoMusica}

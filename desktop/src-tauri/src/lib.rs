@@ -38,6 +38,9 @@ pub fn run() {
             spotify::spotify_pausar,
             spotify::spotify_retomar,
             spotify::spotify_atual,
+            spotify::spotify_proxima,
+            spotify::spotify_anterior,
+            spotify::spotify_volume,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o estuda-ai");

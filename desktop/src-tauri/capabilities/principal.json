@@ -18,6 +18,9 @@
     "allow-spotify-tocar",
     "allow-spotify-pausar",
     "allow-spotify-retomar",
-    "allow-spotify-atual"
+    "allow-spotify-atual",
+    "allow-spotify-proxima",
+    "allow-spotify-anterior",
+    "allow-spotify-volume"
   ]
 }
