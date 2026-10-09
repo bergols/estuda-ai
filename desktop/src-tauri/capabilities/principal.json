@@ -21,6 +21,8 @@
     "allow-spotify-atual",
     "allow-spotify-proxima",
     "allow-spotify-anterior",
-    "allow-spotify-volume"
+    "allow-spotify-volume",
+    "allow-atualizacao-verificar",
+    "allow-atualizacao-instalar"
   ]
 }

@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Serif_4 } from "next/font/google";
 
+import { Atualizacao } from "@/components/atualizacao";
+import { DESKTOP } from "@/lib/plataforma";
+
 import { Provedores } from "./provedores";
 import "katex/dist/katex.min.css"; // fórmulas (components/texto-rico.tsx)
 import "./globals.css";
@@ -31,7 +34,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
       </head>
       <body className="min-h-full">
-        <Provedores>{children}</Provedores>
+        <Provedores>
+          {children}
+          {/* Só no app desktop: a web na Vercel atualiza a cada deploy */}
+          {DESKTOP && <Atualizacao />}
+        </Provedores>
       </body>
     </html>
   );

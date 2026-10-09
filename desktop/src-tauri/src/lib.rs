@@ -1,6 +1,7 @@
 //! App desktop do estuda-ai: as telas são o frontend Next.js exportado como arquivos
 //! estáticos (frontend/out); este lado cuida do que uma página não pode fazer sozinha.
 
+mod atualizacao;
 mod cofre;
 mod janela;
 mod ponte;
@@ -15,7 +16,9 @@ pub fn run() {
     tauri::Builder::default()
         .manage(estado)
         .manage(spotify::Player::novo())
+        .manage(atualizacao::Pendente::default())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Fila local (SQLite na pasta de dados do app) e o laço de envio
             let sincronia = sincronia::Sincronia::abrir(app.handle())?;
@@ -41,6 +44,8 @@ pub fn run() {
             spotify::spotify_proxima,
             spotify::spotify_anterior,
             spotify::spotify_volume,
+            atualizacao::atualizacao_verificar,
+            atualizacao::atualizacao_instalar,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o estuda-ai");

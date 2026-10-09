@@ -21,6 +21,8 @@ const COMANDOS: &[&str] = &[
     "spotify_proxima",
     "spotify_anterior",
     "spotify_volume",
+    "atualizacao_verificar",
+    "atualizacao_instalar",
 ];
 
 fn main() {
