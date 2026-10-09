@@ -23,6 +23,12 @@
     "allow-spotify-anterior",
     "allow-spotify-volume",
     "allow-atualizacao-verificar",
-    "allow-atualizacao-instalar"
+    "allow-atualizacao-instalar",
+    "allow-foco-sites-bloquear",
+    "allow-foco-sites-liberar",
+    "allow-foco-sites-restaurar",
+    "allow-foco-sites-situacao",
+    "allow-foco-programas-iniciar",
+    "allow-foco-programas-parar"
   ]
 }

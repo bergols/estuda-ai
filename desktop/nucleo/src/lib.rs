@@ -3,6 +3,8 @@
 
 pub mod api;
 
+pub mod bloqueio;
+
 pub mod fila;
 
 pub mod spotify;

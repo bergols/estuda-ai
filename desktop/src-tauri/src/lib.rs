@@ -2,6 +2,7 @@
 //! estáticos (frontend/out); este lado cuida do que uma página não pode fazer sozinha.
 
 mod atualizacao;
+mod bloqueio;
 mod cofre;
 mod janela;
 mod ponte;
@@ -17,6 +18,7 @@ pub fn run() {
         .manage(estado)
         .manage(spotify::Player::novo())
         .manage(atualizacao::Pendente::default())
+        .manage(bloqueio::Monitor::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -46,6 +48,12 @@ pub fn run() {
             spotify::spotify_volume,
             atualizacao::atualizacao_verificar,
             atualizacao::atualizacao_instalar,
+            bloqueio::foco_sites_bloquear,
+            bloqueio::foco_sites_liberar,
+            bloqueio::foco_sites_restaurar,
+            bloqueio::foco_sites_situacao,
+            bloqueio::foco_programas_iniciar,
+            bloqueio::foco_programas_parar,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o estuda-ai");

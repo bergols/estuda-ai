@@ -23,6 +23,12 @@ const COMANDOS: &[&str] = &[
     "spotify_volume",
     "atualizacao_verificar",
     "atualizacao_instalar",
+    "foco_sites_bloquear",
+    "foco_sites_liberar",
+    "foco_sites_restaurar",
+    "foco_sites_situacao",
+    "foco_programas_iniciar",
+    "foco_programas_parar",
 ];
 
 fn main() {
