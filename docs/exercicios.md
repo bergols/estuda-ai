@@ -694,3 +694,29 @@ NOT NULL, chave uuid NOT NULL, minutos int NOT NULL);`
 ```sql
 
 ```
+
+### 7.6 CTE que modifica dados, `ON CONFLICT` em índice de expressão e a trava do `UPSERT`
+
+- (a) Leia `SQL_SITES` em `backend/app/servicos/bloqueios.py`. O `DELETE` (na CTE `apagados`) e o
+  `INSERT` rodam no mesmo comando: o `INSERT` "vê" as linhas que o `DELETE` apagou? E se a lista nova
+  tivesse um domínio que o `DELETE` também apagasse, o que aconteceria (dica: os dois veem o mesmo
+  snapshot)? Por que isso não acontece aqui?
+- (b) Reescreva a troca da lista de sites como `DELETE` de tudo + `INSERT` de tudo. O resultado é o
+  mesmo? Compare, com `SELECT xmin, ctid, criado_em FROM sites_bloqueados`, o que muda nas linhas
+  que ficaram em cada versão. Qual gera mais trabalho para o `VACUUM`?
+- (c) Tente `ALTER TABLE programas_bloqueados ADD CONSTRAINT x UNIQUE (usuario_id, sistema,
+  lower(nome));`. Qual o erro? Depois, num banco de teste, faça um `INSERT ... ON CONFLICT
+  (usuario_id, sistema, nome) DO NOTHING` (sem o `lower`). O Postgres aceita? Por quê?
+- (d) Com duas sessões do `psql`: na 1ª, `BEGIN;` + o `UPSERT` de `preferencias_foco` do seu usuário.
+  Na 2ª, o mesmo `UPSERT`. O que acontece com a 2ª até você dar `COMMIT` na 1ª? Agora troque o
+  `UPSERT` por um `SELECT ... FROM preferencias_foco WHERE usuario_id = ...` (sem `FOR UPDATE`): a
+  2ª espera? O que isso diz sobre usar só leitura para "travar" o usuário?
+- (e) No Postgres 17, escreva a mesma troca de lista com `MERGE ... WHEN NOT MATCHED BY SOURCE THEN
+  DELETE`. Que cuidado o `WHEN NOT MATCHED BY SOURCE` precisa para não apagar as linhas dos OUTROS
+  usuários?
+
+**Minha resposta:**
+
+```sql
+
+```

@@ -41,8 +41,9 @@ Oracle sair (script `deploy/oracle-criar-vm.sh`). Roadmap no `README.md`.
 **Fase 7** (app desktop, sessões de estudo, Spotify, modo foco) em 4 sessões, plano aprovado:
 (1) app Tauri + login + instaladores, (2) sessões de estudo, SQLite offline com chaves de
 idempotência, analytics de foco e (3) Spotify (PKCE, refresh token cifrado na aplicação com
-AES-GCM, não pgcrypto) **concluídas**; (3b) atualização automática **concluída**; (4) bloqueio de programas e de sites (hosts, com
-restauração garantida) e saída de emergência. Decisões já tomadas pelo autor: o desktop
+AES-GCM, não pgcrypto) **concluídas**; (3b) atualização automática e (4) bloqueio de programas e de sites (hosts, com
+guardião temporário: senha 1x por sessão) e saída de emergência **concluídas**: a Fase 7 está
+fechada. Decisões já tomadas pelo autor: o desktop
 fala com o **BFF da Vercel** (não direto com a API); a sessão de estudo roda só no desktop
 (a web mostra painel/histórico).
 Pendente da fase 3: o teste real com a API (falta `ANTHROPIC_API_KEY` no `.env`). Exercícios de SQL por fase em `docs/exercicios.md` (sem respostas; o autor
@@ -300,6 +301,12 @@ Detalhes e o porquê em `docs/modo-foco.md`.
   tauri.conf.json>` ou "Run workflow". A tag **publica** a Release com o `latest.json`, e
   todo app instalado (0.3.3+) se atualiza sozinho: tag = entrega. Repositório público desde
   a 0.3.3 (minutos grátis).
+- Bloqueios (`nucleo/src/bloqueio.rs` gera os scripts do guardião; `src-tauri/src/bloqueio.rs`
+  executa; regras da tela em `frontend/src/lib/foco/bloqueio.ts`): o hosts só muda por um script de
+  administrador que NUNCA executa arquivo alterável pelo usuário; todo valor que entra nele é
+  validado e citado (`aspas_sh`/`aspas_applescript`/`aspas_ps`). Mudou o script? Os testes o
+  executam (sh no Mac/Linux, PowerShell só no Windows do CI: rode o `desktop.yml` por "Run
+  workflow" antes da tag). Requisito número 1: nunca ficar com sites bloqueados.
 - Atualização automática (`src-tauri/src/atualizacao.rs`, regras em
   `frontend/src/lib/atualizacao.ts`): pacotes assinados com `~/.tauri/estuda-ai.key` (senha no
   Keychain, item `estuda-ai-updater-senha`; cópias nos secrets `TAURI_SIGNING_PRIVATE_KEY*`).

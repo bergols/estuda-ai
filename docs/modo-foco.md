@@ -393,6 +393,196 @@ soltar o controle (espera 350 ms sem movimento), para arrastar não virar dezena
 
 Erro de música **nunca** interrompe a sessão: o timer segue, e a tela mostra o aviso.
 
+## 4e. Bloqueios: sites, programas e a saída de emergência
+
+Configuração na tela **Foco → Bloqueios** (fica no servidor, vale nos dois computadores):
+
+- **sites** (iguais em qualquer sistema);
+- **programas** por sistema: no Mac, o nome do app ("Discord"); no Windows, o do `.exe`
+  ("Discord.exe");
+- duas chaves liga/desliga e a espera da saída de emergência.
+
+O padrão é não bloquear nada: bloquear sites pede a senha do computador, e isso tem que ser
+escolha sua.
+
+### Sites: por que o arquivo hosts
+
+| Opção | Por que não |
+|---|---|
+| Extensão de navegador | uma por navegador, e é só abrir outro navegador |
+| DNS próprio / filtro de rede | muda a rede do computador inteiro e é bem mais difícil de desfazer se der errado |
+| Firewall (`pf` no Mac, Windows Firewall) | bloqueia IP, e um site grande usa centenas de IPs que mudam |
+| Tempo de Uso (Mac) / Family Safety (Windows) | não têm API para um app ligar e desligar por sessão |
+| **Arquivo hosts** ✅ | vale para todos os navegadores e apps, é texto puro e é fácil de restaurar |
+
+Cada site vira quatro linhas: `0.0.0.0` (IPv4) e `::` (IPv6), com e sem `www`. É `0.0.0.0` e não
+`127.0.0.1` porque é o endereço "nenhum lugar": a conexão falha na hora, sem esperar um servidor
+local que não existe.
+
+**Limites do hosts** (vale saber):
+
+- Uma aba que **já estava aberta** no site pode continuar funcionando por um tempo, porque o
+  navegador reaproveita a conexão e guarda o DNS por cerca de 1 minuto. Feche as abas antes de
+  começar.
+- Uma VPN com DNS próprio pode ignorar o hosts.
+- Não é um cadeado: quem tem a senha de administrador desfaz o bloqueio na mão. O objetivo é
+  **atrito**, não prisão.
+
+### O guardião (uma senha por sessão)
+
+O hosts só pode ser alterado pelo administrador. Havia duas saídas (sessão 4, decisão do autor):
+
+- **Ajudante permanente:** um serviço de administrador instalado uma vez. Nunca mais pede senha,
+  mas fica um processo com poder de administrador sempre rodando, que qualquer programa do
+  usuário poderia acionar.
+- **Guardião temporário** ✅: a senha é pedida UMA vez por sessão. Nada com poder de
+  administrador fica instalado.
+
+Ao começar a sessão, o app roda como administrador um script curto, o **guardião**. As regras e
+os scripts estão em `desktop/nucleo/src/bloqueio.rs`. O guardião:
+
+1. copia o hosts original (`hosts.antes`) e o que vai escrever (`hosts.bloqueado`) para uma pasta
+   do sistema, que só o administrador altera:
+   - Mac: `/Library/Application Support/estuda-ai`;
+   - Windows: `C:\ProgramData\estuda-ai`;
+2. deixa uma **restauração no próximo boot**: LaunchDaemon no Mac, tarefa agendada como SYSTEM no
+   Windows;
+3. escreve o bloco entre duas marcas (`# >>> estuda-ai ...` e `# <<< estuda-ai <<<`);
+4. fica **vigiando** a cada 2 s e libera quando acontecer o primeiro destes:
+
+| Caminho de volta | Quando |
+|---|---|
+| Sinal do app | a sessão acabou (fim, encerrar, emergência): o app cria um arquivo de sinal na pasta dele |
+| O app sumiu | fechou ou travou (o guardião confere o processo pelo PID **e** pelo nome, porque o sistema reaproveita PIDs) |
+| Prazo | o fim previsto da sessão + 60 min (pausas manuais esticam a sessão), no máximo 12 h |
+| Boot | o computador desligou no meio: o LaunchDaemon / a tarefa agendada restaura ao ligar |
+
+**Ao liberar**, se o hosts ainda é *exatamente* o que o guardião escreveu, volta a cópia original
+**byte a byte**. Assim continuam iguais as quebras de linha do Windows (CRLF), a falta de quebra no
+fim e qualquer formatação. Se alguém editou o hosts no meio da sessão, a cópia original apagaria a
+edição; aí o guardião tira **só o bloco** entre as marcas. Restaurar sem bloqueio não faz nada,
+então os quatro caminhos podem disparar à vontade.
+
+Cada guardião tem um **token**. Se uma sessão nova começar enquanto o vigia da anterior ainda roda
+(o app travou e você abriu de novo), o vigia antigo percebe que não é mais o dono e sai **sem**
+restaurar. Sem isso, ele desfaria o bloqueio da sessão nova.
+
+**Segurança do que roda como administrador:**
+
+- tudo o que entra no script é validado (domínio só `[a-z0-9.-]`, a mesma regra do `CHECK` do banco)
+  e citado pelas regras de cada linguagem (`'...'` no `sh`, `"..."` no AppleScript, `'...'` no
+  PowerShell);
+- o script vai **dentro do próprio comando**. O administrador nunca executa nem copia para o hosts
+  um arquivo que o usuário comum possa alterar. Senão, um programa qualquer poderia trocar esse
+  arquivo entre a checagem e o uso e ganhar um "administrador de aluguel";
+- o único arquivo do usuário que o guardião olha é o de sinal, e só para saber se ele **existe**:
+  pedir para liberar é tudo o que dá para fazer com ele.
+
+### Elevação de permissão em cada sistema
+
+**macOS:** `osascript -e 'do shell script "..." with administrator privileges'`.
+
+- A janela de senha é a do próprio sistema (Authorization Services), com o texto explicando o
+  motivo. Não é `sudo` num terminal escondido.
+- O comando grava o script em `/Library/Application Support/estuda-ai/guardiao.sh` (dono `root`,
+  `700`), roda `aplicar` e deixa `vigiar` em segundo plano com `nohup ... > /dev/null &`.
+- O `do shell script` só volta quando a saída fecha; com o vigia redirecionado, volta logo depois
+  do `aplicar`.
+- A restauração do boot é `/Library/LaunchDaemons/io.github.bergols.estudaai.restaurar.plist`
+  (`RunAtLoad`). Ela se apaga sozinha depois de rodar.
+- Fechar programas **não** pede nada: são processos do seu próprio usuário (sinal `SIGTERM`, sem
+  AppleScript nem Acessibilidade).
+
+**Windows:** UAC via `Start-Process powershell -Verb RunAs`, numa janela escondida.
+
+- O script vai por `-EncodedCommand` (base64 do texto em UTF-16LE), para evitar uma camada inteira
+  de aspas na linha de comando.
+- A pasta `C:\ProgramData\estuda-ai` recebe permissões explícitas: SYSTEM e Administradores com
+  controle total, Usuários só leitura.
+  - As permissões usam **SIDs** (`*S-1-5-32-545` etc.), não nomes: o nome do grupo muda com o
+    idioma do Windows ("Usuários" x "Users").
+- A restauração do boot é a tarefa agendada `estuda-ai-restaurar` (ao iniciar, como SYSTEM).
+- Recusar o UAC cancela só o bloqueio de sites: a sessão segue.
+- O Windows Defender pode reclamar de alteração no hosts quando o domínio é da Microsoft.
+- `ipconfig /flushdns` limpa o cache de DNS; no Mac, `dscacheutil -flushcache` + `killall -HUP
+  mDNSResponder`.
+
+### Se tudo falhar: restaurar o hosts na mão
+
+Se aparecer o aviso "os sites continuam bloqueados", use primeiro o botão **Desbloquear agora** no
+app (ele pede a senha). Sem o app:
+
+**macOS**, no Terminal:
+
+```bash
+sudo /bin/sh "/Library/Application Support/estuda-ai/guardiao.sh" restaurar
+```
+
+Ou edite e apague o bloco entre as marcas:
+
+```bash
+sudo nano /etc/hosts
+```
+
+**Windows**, no PowerShell **como administrador**:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\ProgramData\estuda-ai\guardiao.ps1 restaurar
+```
+
+Ou o Bloco de Notas como administrador em `C:\Windows\System32\drivers\etc\hosts`, apagando o
+bloco, e depois `ipconfig /flushdns`.
+
+### Programas
+
+O monitor (`desktop/src-tauri/src/bloqueio.rs`, crate `sysinfo`) lista os processos a cada 2 s e
+fecha os da lista:
+
+- no Mac com `SIGTERM` (o app pode salvar e sair direito), e à força se não der;
+- no Windows, à força, porque não há "pedir para sair" para um processo sem janela.
+
+Detalhes de quem é fechado:
+
+- No Mac, fecha também os **ajudantes de dentro do pacote** (`Discord.app/.../Discord Helper`):
+  fechar só o processo principal deixaria os outros vivos.
+- **Nunca fechados**, mesmo se estiverem na lista: o sistema (Finder, Dock, explorer.exe,
+  dwm.exe...), o próprio app e o Spotify, que toca a música da sessão.
+- Cada programa fechado vira um evento `programa_bloqueado` na sessão (conta como interrupção no
+  painel). Vira no máximo um a cada 30 s por programa, para um app que reabre sozinho não encher a
+  sessão de eventos.
+
+### Saída de emergência
+
+Com bloqueio ativo, **Encerrar sessão** vira **Saída de emergência**:
+
+- a tela conta a espera configurada (padrão 60 s, de 10 a 600) e só depois oferece **Sair e
+  desbloquear**;
+- **continuar estudando** cancela a qualquer momento;
+- sair registra o evento `saida_emergencia` com a espera cumprida.
+
+É atrito de propósito: a vontade de "só dar uma olhadinha" costuma passar antes do fim da
+contagem. Fechar o app à força também libera (o guardião vê o processo sumir), e isso é
+intencional: nunca ficar preso é mais importante que impedir a fuga.
+
+### Testes
+
+Os scripts do guardião são **executados de verdade** nos testes (`nucleo/src/bloqueio.rs`),
+contra um hosts falso numa pasta temporária, sem administrador:
+
+- **sh** (Mac e o Linux do CI):
+  - LF, CRLF, sem quebra no fim e vazio voltam byte a byte;
+  - "travou" e aplicou de novo: um bloco só, e a restauração do boot volta ao original;
+  - hosts editado no meio: tira só o bloco;
+  - o app morre (um `sleep` no papel do app), o sinal e o prazo liberam;
+  - o vigia de uma sessão antiga não desfaz o bloqueio da nova;
+  - no Mac, também o caminho inteiro do AppleScript (`osascript` → `do shell script` → vigia em
+    segundo plano → sinal), só sem a senha.
+- **PowerShell** (no Windows do CI): byte a byte com CRLF/LF/sem quebra, edição no meio, o app
+  morre (um `ping`).
+
+O que só dá para conferir com a senha de verdade (a janela do sistema, o LaunchDaemon, a tarefa
+agendada) está no roteiro de teste manual do fim da sessão 4.
+
 ## 5. Instaladores e CI
 
 | Sistema | Arquivo | Observação |

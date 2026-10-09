@@ -33,6 +33,7 @@ Histórico de migrations:
 | `indice_sessoes_terminada_em` | 7 | `(usuario_id, terminada_em) INCLUDE (metodo)` parcial, para o LATERAL do analytics de foco |
 | `spotify` | 7 | `spotify_contas` (tokens cifrados na aplicação), `spotify_playlists` (`UNIQUE NULLS NOT DISTINCT`), `preferencias_foco` |
 | `sessoes_de_estudo` | 7 | `sessoes_estudo` (chave de idempotência, colunas geradas), `pausas_sessao`, `eventos_foco`, `VIEW vw_sessoes_foco` |
+| `bloqueios_do_modo_foco` | 7 | `sites_bloqueados` (domínio validado por regex no `CHECK`), `programas_bloqueados` (índice único sobre `lower(nome)`), preferências de bloqueio em `preferencias_foco` |
 
 > Dica de estudo: abra o `psql` e confira cada afirmação daqui.
 > `docker compose exec db psql -U estuda_ai -d estuda_ai` e depois `\d+ flashcards`.
@@ -69,6 +70,8 @@ erDiagram
     usuarios ||--o{ spotify_playlists : "escolheu (CASCADE)"
     disciplinas |o--o{ spotify_playlists : "da disciplina (CASCADE, FK composta)"
     usuarios ||--o| preferencias_foco : "prefere (CASCADE, 1:1)"
+    usuarios ||--o{ sites_bloqueados : "bloqueia (CASCADE)"
+    usuarios ||--o{ programas_bloqueados : "fecha (CASCADE)"
 
     spotify_contas {
         bigint usuario_id PK,FK
@@ -94,8 +97,24 @@ erDiagram
     preferencias_foco {
         bigint usuario_id PK,FK
         text spotify_no_intervalo "pausar | trocar | continuar"
+        int espera_emergencia_s "10 a 600; padrão 60"
+        boolean bloquear_sites
+        boolean bloquear_programas
         timestamptz criado_em
         timestamptz atualizado_em
+    }
+    sites_bloqueados {
+        bigint id PK
+        bigint usuario_id FK
+        text dominio "CHECK com regex; UNIQUE (usuario_id, dominio)"
+        timestamptz criado_em
+    }
+    programas_bloqueados {
+        bigint id PK
+        bigint usuario_id FK
+        text sistema "macos | windows"
+        text nome "sem / \\ nem controle; UNIQUE (usuario_id, sistema, lower(nome))"
+        timestamptz criado_em
     }
 
     sessoes_estudo {
@@ -598,6 +617,29 @@ quando consegue (inclusive horas depois, se estava sem internet). Decisões:
 
 ---
 
+### `sites_bloqueados` e `programas_bloqueados` (fase 7)
+
+- **O banco como última barreira de uma entrada perigosa.** O domínio vai parar no arquivo hosts,
+  escrito por um processo de administrador. Um `"a.com\n1.2.3.4 banco.com"` viraria uma linha nova
+  no hosts, redirecionando o banco para outro IP. A API normaliza e valida, o app valida de novo, e o
+  `CHECK (dominio ~ '^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')` vale para qualquer
+  caminho de escrita, inclusive um script de admin que pule a API.
+- **Índice único de expressão** em `programas_bloqueados (usuario_id, sistema, lower(nome))`:
+  "Discord" e "discord" são o mesmo programa, mas o nome fica como foi digitado. `UNIQUE` como
+  constraint só aceita colunas; com expressão, é `CREATE UNIQUE INDEX` (o mesmo de
+  `uq_disciplinas_usuario_nome`). O `ON CONFLICT (usuario_id, sistema, lower(nome))` encontra esse
+  índice pela lista de expressões.
+- **Linhas que nunca mudam:** a tela troca a lista inteira, e a API faz isso com uma CTE que modifica
+  dados: `DELETE` do que saiu + `INSERT ... ON CONFLICT DO NOTHING` do que entrou, num comando só.
+  As linhas que ficaram não são reescritas (menos WAL, menos tuplas mortas, `criado_em` preservado).
+  O papel do app tem `SELECT, INSERT, DELETE`, sem `UPDATE`.
+- **Concorrência:** o `UPSERT` em `preferencias_foco` no começo da mesma transação trava a linha do
+  usuário. Dois computadores salvando juntos acontecem um depois do outro, e o segundo, com um
+  snapshot novo (READ COMMITTED tira um por comando), apaga o que o primeiro gravou. Sem a trava, a
+  lista final seria a união das duas.
+
+---
+
 ## 4. A desnormalização consciente: estado do SM-2
 
 O estado atual de um flashcard **pode ser derivado** do histórico: é o resultado da última
@@ -847,6 +889,7 @@ para tabelas em que o app não tem `DELETE`, porque rodam com os privilégios do
 | sessão de estudo | `CASCADE` → pausas e eventos | são partes da sessão |
 | usuário | `CASCADE` → conta do Spotify, playlists, preferências | tudo é dele |
 | disciplina (em `spotify_playlists`) | `CASCADE` (FK composta) | a playlist daquela disciplina perde o sentido |
+| usuário | `CASCADE` → sites e programas bloqueados | configuração dele |
 
 Atualizar `materiais.disciplina_id` propaga para `trechos.disciplina_id`
 (`ON UPDATE CASCADE` da FK composta).

@@ -448,7 +448,7 @@ estuda-ai/
   - [x] Deploy: `docker-compose.prod.yml` (Caddy com HTTPS, API e banco sem porta exposta,
     3 redes, backend sem root), scripts de servidor, backup diário com `pg_dump` + restore
     testado num servidor novo, diagrama de arquitetura. Destino: VM Oracle Always Free.
-- [ ] **Fase 7: app desktop, sessões de estudo, Spotify e modo foco.**
+- [x] **Fase 7: app desktop, sessões de estudo, Spotify e modo foco.**
   - [x] App Tauri v2 para Windows e macOS com as telas do frontend (exportação estática),
     login com token no cofre do sistema, instaladores pelo GitHub Actions.
   - [x] Sessões de estudo (pomodoro, bloco contínuo, 52/17, personalizado) com janela de
@@ -458,5 +458,7 @@ estuda-ai/
   - [x] Spotify: OAuth com PKCE (retorno em 127.0.0.1), refresh token cifrado na aplicação
     (AES-256-GCM), renovação com `FOR UPDATE`, playlist por disciplina/método/intervalo, player
     do computador com tratamento de Spotify fechado, 401, 429 e cota.
-  - [ ] Modo foco: janela por cima de tudo, bloqueio de programas e de sites (hosts),
-    saída de emergência.
+  - [x] Modo foco: janela por cima de tudo, bloqueio de programas e de sites (arquivo hosts,
+    com um "guardião" que pede a senha uma vez por sessão e sempre restaura: no fim, se o app
+    fechar, no prazo ou no boot), saída de emergência com espera, e atualização automática
+    assinada do app.
