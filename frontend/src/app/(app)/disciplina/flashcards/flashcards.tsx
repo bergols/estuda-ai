@@ -11,10 +11,14 @@ import { type Ordem, useFlashcards, useGerarFlashcards, useMateriais } from "@/l
 import { agrupar } from "@/lib/ordem-conteudo";
 
 import { useDisciplinaId } from "../topo";
+import { Baralho } from "./baralho";
 
 export function Flashcards() {
   const id = useDisciplinaId();
-  const [ordem, setOrdem] = useState<Ordem>("conteudo");
+  // Cards (um por vez, como fichas) ou lista; no modo cards a ordem é sempre a da matéria
+  const [modo, setModo] = useState<"cards" | "lista">("cards");
+  const [ordemDaLista, setOrdem] = useState<Ordem>("conteudo");
+  const ordem = modo === "cards" ? "conteudo" : ordemDaLista;
   const cards = useFlashcards(id, ordem);
   const materiais = useMateriais(id);
   const gerar = useGerarFlashcards(id);
@@ -27,7 +31,15 @@ export function Flashcards() {
         titulo={cards.data ? `${cards.data.length} flashcards` : "Flashcards"}
         acoes={
           <span className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-            <SeletorOrdem ordem={ordem} mudar={setOrdem} />
+            <span className="flex gap-3 text-sm">
+              {(["cards", "lista"] as const).map((m) => (
+                <button key={m} type="button" onClick={() => setModo(m)} aria-pressed={modo === m}
+                  className={modo === m ? "text-tinta" : "text-apagado underline underline-offset-4 hover:text-acento"}>
+                  {m}
+                </button>
+              ))}
+            </span>
+            {modo === "lista" && <SeletorOrdem ordem={ordemDaLista} mudar={setOrdem} />}
             {!gerando && (
               <Botao variante="discreto" onClick={() => setGerando(true)}>
                 gerar com IA
@@ -54,7 +66,9 @@ export function Flashcards() {
         {cards.isPending && <Carregando />}
         {cards.isError && <Erro erro={cards.error} tentarDeNovo={() => cards.refetch()} />}
         {cards.data?.length === 0 && <Vazio>Nenhum flashcard. Gere a partir de um tema ou de um material.</Vazio>}
-        {cards.data && ordem === "conteudo" ? (
+        {cards.data && cards.data.length > 0 && modo === "cards" ? (
+          <Baralho cards={cards.data} nomes={nomes} disciplina={id} />
+        ) : cards.data && ordem === "conteudo" ? (
           <ListaAgrupada grupos={agrupar(cards.data, nomes)} item={(c) => <Ficha key={c.id} card={c} />} />
         ) : (
           <ul className="divide-y divide-fio">
