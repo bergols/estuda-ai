@@ -5081,6 +5081,7 @@
     },
     "/disciplinas/{disciplina_id}/flashcards": {
       "get": {
+        "description": "Cards da disciplina. `ordem=conteudo` (padrão): na sequência da matéria (material\ne posição do trecho de origem); `ordem=recentes`: os mais novos primeiro.",
         "operationId": "listar_flashcards_disciplinas__disciplina_id__flashcards_get",
         "parameters": [
           {
@@ -5090,6 +5091,20 @@
             "schema": {
               "title": "Disciplina Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ordem",
+            "required": false,
+            "schema": {
+              "default": "conteudo",
+              "enum": [
+                "conteudo",
+                "recentes"
+              ],
+              "title": "Ordem",
+              "type": "string"
             }
           }
         ],
@@ -5515,6 +5530,7 @@
     },
     "/disciplinas/{disciplina_id}/questoes": {
       "get": {
+        "description": "Questões da disciplina, na ordem da matéria (padrão) ou as mais novas primeiro.",
         "operationId": "listar_questoes_disciplinas__disciplina_id__questoes_get",
         "parameters": [
           {
@@ -5524,6 +5540,20 @@
             "schema": {
               "title": "Disciplina Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ordem",
+            "required": false,
+            "schema": {
+              "default": "conteudo",
+              "enum": [
+                "conteudo",
+                "recentes"
+              ],
+              "title": "Ordem",
+              "type": "string"
             }
           }
         ],

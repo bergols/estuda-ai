@@ -203,3 +203,37 @@ def test_material_grande_manda_ate_30_trechos_espalhados(
     ordens = [int(t.conteudo.split()[1]) for t in contexto.trechos.values()]
     assert len(ordens) == 25  # 100 trechos, passo ceil(100/30) = 4
     assert ordens[0] == 0 and ordens[-1] == 96  # do começo ao fim do material
+
+
+def test_lista_na_ordem_do_conteudo(session, client, headers, disciplina_id):
+    """Cards criados FORA da ordem da matéria voltam na ordem dela: material (ordem de
+    envio) e posição do trecho; sem trecho, no fim. `ordem=recentes` mantém a antiga."""
+    materiais = []
+    for titulo in ("Aula 1", "Aula 2"):
+        m = Material(disciplina_id=disciplina_id, titulo=titulo, tipo="texto", status="concluido",
+                     hash_sha256=titulo[-1] * 64, tamanho_bytes=1)
+        session.add(m)
+        session.flush()
+        materiais.append(m)
+    trechos = {}
+    for m in materiais:
+        for ordem in (0, 1):
+            t = Trecho(material_id=m.id, disciplina_id=disciplina_id, ordem=ordem, conteudo="x")
+            session.add(t)
+            session.flush()
+            trechos[(m.titulo, ordem)] = t
+    # Criados de trás para frente (como lotes gerados fora de ordem)
+    for frente, chave in [("aula2-t1", ("Aula 2", 1)), ("sem trecho", None), ("aula1-t1", ("Aula 1", 1)),
+                          ("aula2-t0", ("Aula 2", 0)), ("aula1-t0", ("Aula 1", 0))]:
+        c = Flashcard(disciplina_id=disciplina_id, frente=frente, verso="v", origem="manual")
+        if chave:
+            c.trechos.append(trechos[chave])
+        session.add(c)
+        session.flush()
+
+    url = f"/disciplinas/{disciplina_id}/flashcards"
+    frentes = [c["frente"] for c in client.get(url, headers=headers).json()]
+    assert frentes == ["aula1-t0", "aula1-t1", "aula2-t0", "aula2-t1", "sem trecho"]
+    recentes = [c["frente"] for c in client.get(url + "?ordem=recentes", headers=headers).json()]
+    assert recentes[0] == "aula1-t0" and recentes[-1] == "aula2-t1"
+    assert client.get(url + "?ordem=qualquer", headers=headers).status_code == 422

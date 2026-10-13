@@ -149,10 +149,15 @@ export function usePerguntar(disciplinaId: number) {
   });
 }
 
-export function useFlashcards(disciplinaId: number) {
+/** "conteudo": na ordem da matéria (material e trecho de origem); "recentes": mais novos primeiro. */
+export type Ordem = "conteudo" | "recentes";
+
+const comOrdem = (id: number, ordem: Ordem) => ({ params: { path: { disciplina_id: id }, query: { ordem } } });
+
+export function useFlashcards(disciplinaId: number, ordem: Ordem = "conteudo") {
   return useQuery({
-    queryKey: chaves.flashcards(disciplinaId),
-    queryFn: () => dados(api.GET("/disciplinas/{disciplina_id}/flashcards", caminhoDisciplina(disciplinaId))),
+    queryKey: [...chaves.flashcards(disciplinaId), ordem],
+    queryFn: () => dados(api.GET("/disciplinas/{disciplina_id}/flashcards", comOrdem(disciplinaId, ordem))),
   });
 }
 
@@ -169,10 +174,10 @@ export function useGerarFlashcards(disciplinaId: number) {
   });
 }
 
-export function useQuestoes(disciplinaId: number) {
+export function useQuestoes(disciplinaId: number, ordem: Ordem = "conteudo") {
   return useQuery({
-    queryKey: chaves.questoes(disciplinaId),
-    queryFn: () => dados(api.GET("/disciplinas/{disciplina_id}/questoes", caminhoDisciplina(disciplinaId))),
+    queryKey: [...chaves.questoes(disciplinaId), ordem],
+    queryFn: () => dados(api.GET("/disciplinas/{disciplina_id}/questoes", comOrdem(disciplinaId, ordem))),
   });
 }
 

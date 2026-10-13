@@ -3,7 +3,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import selectinload
 
 from app.deps import DisciplinaDoUsuario, EmbedderDep, LLMDep, ProtecaoIA, SessionDep
-from app.models import Questao
+from app.models import Questao, questao_trechos
 from app.routers.perguntar import erro_http
 from app.schemas import (
     GeracaoResumo,
@@ -14,6 +14,7 @@ from app.schemas import (
     TentativaResultado,
 )
 from app.servicos import gerar
+from app.servicos.ordem_conteudo import Ordem, ordenar
 from app.servicos.llm import ErroGeracao
 
 router = APIRouter(prefix="/disciplinas/{disciplina_id}/questoes", tags=["questoes"])
@@ -58,13 +59,14 @@ def gerar_questoes(
 
 
 @router.get("", response_model=list[QuestaoLer])
-def listar_questoes(disciplina: DisciplinaDoUsuario, session: SessionDep):
+def listar_questoes(disciplina: DisciplinaDoUsuario, session: SessionDep, ordem: Ordem = "conteudo"):
+    """Questões da disciplina, na ordem da matéria (padrão) ou as mais novas primeiro."""
     consulta = (
         select(Questao)
         .where(Questao.disciplina_id == disciplina.id)
         .options(*_com_relacionamentos())
-        .order_by(Questao.criado_em.desc(), Questao.id.desc())
     )
+    consulta = ordenar(consulta, Questao, questao_trechos, "questao_id", ordem)
     return session.scalars(consulta).all()
 
 

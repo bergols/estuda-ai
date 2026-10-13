@@ -3,10 +3,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.deps import DisciplinaDoUsuario, EmbedderDep, LLMDep, ProtecaoIA, SessionDep
-from app.models import Flashcard
+from app.models import Flashcard, flashcard_trechos
 from app.routers.perguntar import erro_http
 from app.schemas import FlashcardLer, FlashcardsGeradosSaida, GeracaoResumo, GerarEntrada
 from app.servicos import gerar
+from app.servicos.ordem_conteudo import Ordem, ordenar
 from app.servicos.llm import ErroGeracao
 
 router = APIRouter(prefix="/disciplinas/{disciplina_id}/flashcards", tags=["flashcards"])
@@ -46,7 +47,9 @@ def gerar_flashcards(
 
 
 @router.get("", response_model=list[FlashcardLer])
-def listar_flashcards(disciplina: DisciplinaDoUsuario, session: SessionDep):
+def listar_flashcards(disciplina: DisciplinaDoUsuario, session: SessionDep, ordem: Ordem = "conteudo"):
+    """Cards da disciplina. `ordem=conteudo` (padrão): na sequência da matéria (material
+    e posição do trecho de origem); `ordem=recentes`: os mais novos primeiro."""
     # selectinload: os trechos de TODOS os cards vêm numa 2ª consulta só
     # (WHERE flashcard_id IN (...)), em vez de uma consulta por card (o
     # problema "N+1 consultas" de quem usa ORM sem perceber).
@@ -54,6 +57,6 @@ def listar_flashcards(disciplina: DisciplinaDoUsuario, session: SessionDep):
         select(Flashcard)
         .where(Flashcard.disciplina_id == disciplina.id)
         .options(selectinload(Flashcard.trechos))
-        .order_by(Flashcard.criado_em.desc(), Flashcard.id.desc())
     )
+    consulta = ordenar(consulta, Flashcard, flashcard_trechos, "flashcard_id", ordem)
     return session.scalars(consulta).all()

@@ -429,7 +429,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Listar Flashcards */
+        /**
+         * Listar Flashcards
+         * @description Cards da disciplina. `ordem=conteudo` (padrão): na sequência da matéria (material
+         *     e posição do trecho de origem); `ordem=recentes`: os mais novos primeiro.
+         */
         get: operations["listar_flashcards_disciplinas__disciplina_id__flashcards_get"];
         put?: never;
         post?: never;
@@ -551,7 +555,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Listar Questoes */
+        /**
+         * Listar Questoes
+         * @description Questões da disciplina, na ordem da matéria (padrão) ou as mais novas primeiro.
+         */
         get: operations["listar_questoes_disciplinas__disciplina_id__questoes_get"];
         put?: never;
         post?: never;
@@ -2809,7 +2816,9 @@ export interface operations {
     };
     listar_flashcards_disciplinas__disciplina_id__flashcards_get: {
         parameters: {
-            query?: never;
+            query?: {
+                ordem?: "conteudo" | "recentes";
+            };
             header?: never;
             path: {
                 disciplina_id: number;
@@ -3070,7 +3079,9 @@ export interface operations {
     };
     listar_questoes_disciplinas__disciplina_id__questoes_get: {
         parameters: {
-            query?: never;
+            query?: {
+                ordem?: "conteudo" | "recentes";
+            };
             header?: never;
             path: {
                 disciplina_id: number;

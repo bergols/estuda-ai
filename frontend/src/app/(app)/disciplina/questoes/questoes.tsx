@@ -6,13 +6,18 @@ import { Custo, FormularioGerar } from "@/components/geracao";
 import { TextoRico } from "@/components/texto-rico";
 import { Botao, Carregando, Erro, Secao, Vazio } from "@/components/ui";
 import type { Esquemas } from "@/lib/api";
-import { useGerarQuestoes, useQuestoes, useResponderQuestao } from "@/lib/consultas";
+import { ListaAgrupada, SeletorOrdem } from "@/components/ordem-conteudo";
+import { type Ordem, useGerarQuestoes, useMateriais, useQuestoes, useResponderQuestao } from "@/lib/consultas";
+import { agrupar } from "@/lib/ordem-conteudo";
 
 import { useDisciplinaId } from "../topo";
 
 export function Questoes() {
   const id = useDisciplinaId();
-  const questoes = useQuestoes(id);
+  const [ordem, setOrdem] = useState<Ordem>("conteudo");
+  const questoes = useQuestoes(id, ordem);
+  const materiais = useMateriais(id);
+  const nomes = new Map((materiais.data ?? []).map((m) => [m.id, m.titulo]));
   const gerar = useGerarQuestoes(id);
   const [gerando, setGerando] = useState(false);
 
@@ -20,11 +25,14 @@ export function Questoes() {
     <Secao
       titulo={questoes.data ? `${questoes.data.length} questões` : "Questões"}
       acoes={
-        !gerando && (
-          <Botao variante="discreto" onClick={() => setGerando(true)}>
-            gerar com IA
-          </Botao>
-        )
+        <span className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <SeletorOrdem ordem={ordem} mudar={setOrdem} />
+          {!gerando && (
+            <Botao variante="discreto" onClick={() => setGerando(true)}>
+              gerar com IA
+            </Botao>
+          )}
+        </span>
       }
     >
       {gerando && (
@@ -42,7 +50,8 @@ export function Questoes() {
       )}
       {gerar.data && (
         <div className="mb-8 border-l-2 border-certo pl-4 text-sm">
-          {gerar.data.questoes.length} questão(ões) nova(s) no topo da lista.
+          {gerar.data.questoes.length} questão(ões) nova(s) na lista
+          {ordem === "conteudo" ? ", no lugar da matéria de onde vieram" : ", no topo"}.
           <Custo geracao={gerar.data.geracao} />
         </div>
       )}
@@ -50,9 +59,17 @@ export function Questoes() {
       {questoes.isPending && <Carregando />}
       {questoes.isError && <Erro erro={questoes.error} tentarDeNovo={() => questoes.refetch()} />}
       {questoes.data?.length === 0 && <Vazio>Nenhuma questão. Gere algumas para treinar.</Vazio>}
-      <ol className="divide-y divide-fio">
-        {questoes.data?.map((q, i) => <Questao key={q.id} numero={i + 1} questao={q} />)}
-      </ol>
+      {questoes.data && ordem === "conteudo" ? (
+        <ListaAgrupada
+          grupos={agrupar(questoes.data, nomes)}
+          numerada
+          item={(q, numero) => <Questao key={q.id} numero={numero} questao={q} />}
+        />
+      ) : (
+        <ol className="divide-y divide-fio">
+          {questoes.data?.map((q, i) => <Questao key={q.id} numero={i + 1} questao={q} />)}
+        </ol>
+      )}
     </Secao>
   );
 }
