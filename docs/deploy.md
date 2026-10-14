@@ -355,6 +355,76 @@ Resultado final, pela Vercel: login errado devolve o 401 da API, e o limite de l
 registrou o IP público real do cliente (a Vercel escreve o `X-Forwarded-For`, o BFF repassa
 com o segredo).
 
+## 4c. O servidor do Mac liga e desliga com o app
+
+Com a API no Mac, a VM do Colima ficava ligada dia e noite. A investigação (14/10/2026)
+mostrou de onde vinha o gasto de bateria:
+
+| Medida | Antes | Depois de parar o stack de **dev** |
+|---|---|---|
+| CPU do processo da VM no Mac (`com.apple.Virtualization...`) | ~85% | ~0,7% |
+| `estuda-ai-backend-1` (dev) | ~17–20% parado | parado |
+| Dentro da VM (`colima ssh -- top`) | 87% ocioso, carga 0,2 | — |
+
+O culpado era o `uvicorn --reload` do **dev** com `WATCHFILES_FORCE_POLLING`: ele varre a pasta do
+código sem parar, e cada varredura acorda a VM, que custa CPU do Mac bem mais do que aparece
+dentro dela. O stack de produção, parado, quase não gasta. Por isso:
+
+- **O stack de dev fica parado** (`docker compose stop` na pasta do repo). Suba com
+  `docker compose up -d` só quando for programar, e pare de novo depois.
+- **O app desktop do Mac liga e desliga o servidor** (decisão do autor), para a VM nem existir
+  quando não está em uso (a VM do driver `vz` também segura a RAM que já usou, e isso pesa no
+  swap do Mac).
+
+### Como funciona
+
+`desktop/src-tauri/src/servidor.rs`; só no macOS e só se `~/estuda-ai-servidor` existir (no
+Windows, ou num Mac sem o servidor, nada disso roda).
+
+| Momento | O que acontece |
+|---|---|
+| Abrir o app | se o `/health` (`127.0.0.1:8080`) não responde: `colima start` (se a VM está desligada) → `docker compose -f docker-compose.prod.yml up -d` → espera o `/health` (até 3 min), com a tela "Iniciando o servidor…" e a etapa atual. Leva de 30 s a 1 min. |
+| Com o app aberto | backup a cada 24 h (confere de hora em hora) |
+| Fechar o app (normal: última janela ou Cmd+Q) | a janela some; o app envia as sessões pendentes, faz o backup se o último tem 24 h ou mais, roda `docker compose stop` e `colima stop`, e só então sai (~20 s) |
+| O app travou ou foi fechado à força | **o servidor fica ligado** (decisão do autor): derrubar a API no meio de algo é pior que gastar bateria. Abrir o app de novo encontra tudo no ar. |
+| Abrir o app duas vezes | `tauri-plugin-single-instance`: a segunda abertura só traz a janela que já existe para a frente |
+
+**Por que `colima stop` e não só `docker compose stop`:** o compose parado deixa a VM ligada,
+ociosa (~1–3% de CPU) mas segurando a RAM; a VM parada devolve tudo ao Mac. O preço é o boot: ~30 a
+60 s, contra ~10 a 20 s de religar só os containers.
+
+**Os dados não se perdem:** o `compose stop` manda SIGTERM ao Postgres, que faz um shutdown limpo
+(grava tudo no disco); o `colima stop` desliga a VM normalmente, e os volumes ficam no disco
+dela, que sobrevive ao stop. O que apagaria os dados é `colima delete` ou `docker compose down -v`,
+que o app nunca roda.
+
+**Segurança:** a página só consegue pedir "como está?" (`servidor_situacao`) e "ligar"
+(`servidor_ligar`), sem argumento nenhum. Desligar só acontece no fechamento, do lado do Rust. Os
+binários são chamados por caminho fixo (`/opt/homebrew/bin/colima`...), com um PATH explícito: um
+app aberto pelo Finder não herda o PATH do terminal (testado com `env -i`).
+
+### Quem depende do Mac
+
+O app do **Windows** e o site da **Vercel** falam com a API pelo Tailscale Funnel. Com o app do Mac
+fechado, a API está desligada:
+
+- login, disciplinas, flashcards, questões, revisão e painel ficam fora do ar, com a mensagem
+  "O servidor está desligado: ele roda no Mac e liga quando o estuda-ai é aberto lá" (o BFF
+  traduz a falha de conexão, e também o 502/503/504 sem JSON que o túnel ou o Caddy devolvem, em
+  503 com essa mensagem; `pareceServidorDesligado` em `frontend/src/lib/bff.ts`);
+- as **sessões de estudo** continuam funcionando no app do Windows: ficam na fila local (SQLite) e
+  sobem quando o servidor voltar. Só elas: flashcards e questões precisam da API.
+
+A solução definitiva continua sendo a VM Oracle (seção 4): lá o servidor fica sempre ligado sem
+gastar a bateria de ninguém.
+
+### Backup
+
+Não havia backup agendado no Mac (o cron da seção 5 é da VM). Agora o próprio app roda o
+`deploy/backup.sh` (ao ligar, a cada 24 h com o app aberto e ao desligar, sempre que o último dump
+completo em `~/backups` tem 24 h ou mais; regra pura em `desktop/nucleo/src/servidor.rs`, com
+testes).
+
 ## 5. Backup e restore
 
 ### O que é feito

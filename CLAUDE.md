@@ -331,6 +331,12 @@ Detalhes em `docs/deploy.md`.
 - Backup: `deploy/backup.sh` (cron 04:00 UTC, `pg_dump -Fc` + tar dos PDFs, 14 dias);
   restore: `deploy/restaurar.sh` (cria o papel antes; `--clean --if-exists
   --single-transaction`). Mudou volume ou nome de projeto? Ajuste os dois scripts.
+- **Servidor do Mac liga/desliga com o app desktop do Mac** (`src-tauri/src/servidor.rs`,
+  `docs/deploy.md` 4c): fechar o app roda `compose stop` + `colima stop` (backup antes, se o último
+  tem 24 h+). Para trabalhar no servidor com o app fechado: `colima start` e `docker compose -f
+  docker-compose.prod.yml up -d` no `~/estuda-ai-servidor`. O stack de **dev** fica parado (o
+  `--reload` com polling gastava ~85% de CPU do Mac): `docker compose up -d` só para programar,
+  `docker compose stop` depois.
 - Antes de mexer no deploy, teste a pilha de produção no Mac (ARM como a VM) numa cópia
   em `~/` (o Colima só monta a home), com `PORTA_HTTP=8080 PORTA_HTTPS=8443` e
   `DOMINIO=localhost`.
