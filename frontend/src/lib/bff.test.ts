@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { caminhoDaApi, caminhoPermitido, clienteNativo, ipDoCliente, origemConfiavel, tokenBearer } from "./bff";
+import {
+  caminhoDaApi,
+  caminhoPermitido,
+  clienteNativo,
+  ipDoCliente,
+  origemConfiavel,
+  pareceServidorDesligado,
+  tokenBearer,
+} from "./bff";
 
 describe("allowlist do repasse /api/<caminho>", () => {
   it.each([
@@ -100,5 +108,19 @@ describe("login que devolve token (só cliente nativo)", () => {
 
   it.each(["same-origin", "same-site", "cross-site", "none"])("navegador (Sec-Fetch-Site=%s) é recusado", (site) => {
     expect(clienteNativo(site)).toBe(false);
+  });
+});
+
+describe("servidor desligado (Mac fora do ar)", () => {
+  it("502/503/504 sem JSON vieram do túnel ou do Caddy", () => {
+    expect(pareceServidorDesligado(502, "text/html")).toBe(true);
+    expect(pareceServidorDesligado(504, null)).toBe(true);
+    expect(pareceServidorDesligado(503, "text/plain; charset=utf-8")).toBe(true);
+  });
+
+  it("erros da própria API (JSON) e outros status passam como estão", () => {
+    expect(pareceServidorDesligado(502, "application/json")).toBe(false); // ex.: o LLM falhou
+    expect(pareceServidorDesligado(500, "text/html")).toBe(false);
+    expect(pareceServidorDesligado(404, null)).toBe(false);
   });
 });

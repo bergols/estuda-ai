@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ipDoCliente, origemConfiavel as origemPermitida } from "./bff";
+import { SERVIDOR_DESLIGADO, ipDoCliente, origemConfiavel as origemPermitida, pareceServidorDesligado } from "./bff";
 
 /**
  * Sessão no servidor do Next (BFF, "backend for frontend").
@@ -25,7 +25,8 @@ export function urlDaApi(caminho: string): URL {
  * fetch para a API com falhas traduzidas em respostas claras, em vez de um 500 genérico:
  * - variável faltando no deploy (ex.: BACKEND_URL salva depois do último deploy): 500
  *   dizendo qual;
- * - API inalcançável (servidor desligado, túnel caído, DNS): 503 "fora do ar".
+ * - API inalcançável (servidor desligado, túnel caído, DNS) ou resposta que não veio da
+ *   API (o túnel/Caddy com o Mac desligado): 503 com SERVIDOR_DESLIGADO.
  */
 export async function chamarApi(caminho: string, init: RequestInit): Promise<Response> {
   let url: URL;
@@ -38,15 +39,17 @@ export async function chamarApi(caminho: string, init: RequestInit): Promise<Res
     throw erro;
   }
   try {
-    return await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(120_000) });
+    const resposta = await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(120_000) });
+    if (pareceServidorDesligado(resposta.status, resposta.headers.get("content-type"))) {
+      console.error(`BFF: ${url.origin} respondeu ${resposta.status} sem ser a API (servidor desligado?)`);
+      return Response.json({ detail: SERVIDOR_DESLIGADO }, { status: 503 });
+    }
+    return resposta;
   } catch (erro) {
     // Só no log do servidor (na Vercel: Logs do projeto), nunca na resposta ao navegador
     const causa = erro instanceof Error ? (erro.cause ?? erro) : erro;
     console.error(`BFF: falha ao chamar ${url.origin}:`, causa);
-    return Response.json(
-      { detail: "o servidor da API está fora do ar no momento; tente de novo mais tarde" },
-      { status: 503 },
-    );
+    return Response.json({ detail: SERVIDOR_DESLIGADO }, { status: 503 });
   }
 }
 

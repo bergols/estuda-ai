@@ -76,3 +76,21 @@ export function ipDoCliente(xForwardedFor: string | null): string | null {
   const primeiro = xForwardedFor?.split(",")[0]?.trim();
   return primeiro ? primeiro : null;
 }
+
+/**
+ * Mensagem de "servidor desligado". Hoje a API roda no Mac do autor e só fica ligada
+ * enquanto o app desktop do Mac está aberto (docs/deploy.md, 4c): no Windows e na web,
+ * isso precisa aparecer como explicação, não como erro genérico.
+ */
+export const SERVIDOR_DESLIGADO =
+  "O servidor está desligado: ele roda no Mac e liga quando o estuda-ai é aberto lá. " +
+  "Sessões de estudo feitas no app ficam guardadas e sobem quando ele voltar.";
+
+/**
+ * A resposta veio do caminho até a API (túnel do Tailscale, Caddy), e não da API? Com o
+ * Mac desligado, o túnel ou o Caddy respondem 502/503/504 com HTML ou texto. A API sempre
+ * responde JSON (inclusive os 502/503 dela, como "o LLM falhou"), e esses passam como estão.
+ */
+export function pareceServidorDesligado(status: number, contentType: string | null): boolean {
+  return [502, 503, 504].includes(status) && !(contentType ?? "").includes("application/json");
+}
