@@ -386,6 +386,7 @@ Windows, ou num Mac sem o servidor, nada disso roda).
 | Abrir o app | se o `/health` (`127.0.0.1:8080`) não responde: `colima start` (se a VM está desligada) → `docker compose -f docker-compose.prod.yml up -d` → espera o `/health` (até 3 min), com a tela "Iniciando o servidor…" e a etapa atual. Leva ~25 s. |
 | Com o app aberto | backup a cada 24 h (confere de hora em hora) |
 | Fechar o app (normal: última janela ou Cmd+Q) | a janela some; o app envia as sessões pendentes, faz o backup se o último tem 24 h ou mais, roda `docker compose stop` e `colima stop`, e só então sai (~20 s) |
+| (detalhe) | o desligamento roda no `RunEvent::Exit`: no macOS, o Cmd+Q e o "Sair" chegam pelo `applicationWillTerminate`, que o Tauri entrega só como `Exit`, sem `ExitRequested`. A 0.4.3 desligava no `ExitRequested` e, com Cmd+Q, o servidor ficava ligado (corrigido na 0.4.4, testado com o "Sair" do sistema: backup feito, Colima desligado, app fora em 14 s). O reinício da atualização automática (`RESTART_EXIT_CODE`) não desliga. |
 | O app travou ou foi fechado à força | **o servidor fica ligado** (decisão do autor): derrubar a API no meio de algo é pior que gastar bateria. Abrir o app de novo encontra tudo no ar. |
 | Abrir o app duas vezes | `tauri-plugin-single-instance`: a segunda abertura só traz a janela que já existe para a frente |
 

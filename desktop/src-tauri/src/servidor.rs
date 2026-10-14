@@ -5,8 +5,8 @@
 //!
 //! - Só vale no macOS e só se ~/estuda-ai-servidor existir: em qualquer outro
 //!   computador (o Windows, um Mac sem o servidor) nada disso roda.
-//! - A página só pode pedir "como está?" e "ligar". Desligar acontece aqui, no fechamento
-//!   normal do app. Nenhum argumento vem da página: os comandos e caminhos são fixos.
+//! - A página só pode pedir "como está?" e "ligar". Desligar acontece aqui, no fim
+//!   normal do app (`RunEvent::Exit`: última janela fechada ou Cmd+Q). Nenhum argumento vem da página: os comandos e caminhos são fixos.
 //! - Se o app travar ou for fechado à força, o servidor fica LIGADO (decisão do autor):
 //!   melhor gastar bateria do que derrubar a API no meio de algo. Abrir o app de novo
 //!   encontra tudo no ar e segue.
@@ -34,8 +34,10 @@ const ESPERA_SAUDE: Duration = Duration::from_secs(180);
 pub struct Servidor {
     /// Um ligar/desligar por vez (dois cliques, ou o fechamento no meio do ligar)
     ocupado: tokio::sync::Mutex<()>,
-    /// O fechamento já está desligando: o segundo pedido de saída passa direto
+    /// Já desligou (o `Exit` não roda o desligamento duas vezes)
     desligando: AtomicBool,
+    /// A saída é o reinício da atualização: não desliga
+    reiniciando: AtomicBool,
 }
 
 fn pasta() -> Option<PathBuf> {
@@ -233,44 +235,52 @@ pub fn iniciar_backups(app: AppHandle) {
     });
 }
 
-/// Chamado no fechamento normal do app. `true` = o app deve esperar (o desligamento
-/// começou e chama `app.exit` no fim); `false` = pode sair já (não há servidor, ou o
-/// desligamento já terminou e este é o segundo pedido de saída).
-pub fn ao_fechar(app: &AppHandle) -> bool {
+/// O pedido de saída que vem do reinício da atualização automática
+/// (`app.restart()`, código `RESTART_EXIT_CODE`): o servidor NÃO desliga, porque o app
+/// volta em segundos. Qualquer outro pedido segue para `ao_sair`.
+pub fn ao_pedir_saida(app: &AppHandle, codigo: Option<i32>) {
+    if codigo == Some(tauri::RESTART_EXIT_CODE) {
+        app.state::<Servidor>()
+            .reiniciando
+            .store(true, Ordering::SeqCst);
+    }
+}
+
+/// Fim do app (`RunEvent::Exit`): desliga o servidor e só então devolve o controle.
+///
+/// Por que aqui e não no `ExitRequested`: no macOS, o Cmd+Q e o "Sair" do menu chegam
+/// pelo `applicationWillTerminate`, que o Tauri entrega SÓ como `Exit` (sem
+/// `ExitRequested`). A 0.4.3 desligava no `ExitRequested` e, com o Cmd+Q, o servidor
+/// ficava ligado. O `Exit` acontece em toda saída normal (última janela fechada ou
+/// Cmd+Q), e o macOS espera esta função terminar (~15 s; a janela já sumiu).
+pub fn ao_sair(app: &AppHandle) {
     let Some(pasta) = pasta() else {
-        return false;
+        return;
     };
     let servidor = app.state::<Servidor>();
-    if servidor.desligando.swap(true, Ordering::SeqCst) {
-        return false;
+    if servidor.reiniciando.load(Ordering::SeqCst)
+        || servidor.desligando.swap(true, Ordering::SeqCst)
+    {
+        return;
     }
-    // A janela some na hora; o processo termina o desligamento sozinho (~20 s)
-    for janela in app.webview_windows().values() {
-        let _ = janela.hide();
-    }
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let servidor = app.state::<Servidor>();
+    // 1. Sessões de estudo pendentes: sobem antes, enquanto a API está no ar
+    tauri::async_runtime::block_on(async {
         let _vez = servidor.ocupado.lock().await;
-        // 1. Sessões de estudo pendentes: sobem antes, enquanto a API está no ar
-        let _ = tokio::time::timeout(Duration::from_secs(15), crate::sincronia::sincronizar(&app))
-            .await;
-        // 2. Backup (se vencido), compose stop, colima stop
-        let resultado = tauri::async_runtime::spawn_blocking(move || {
-            if colima_ligado() {
-                if let Err(e) = backup_se_preciso(&pasta) {
-                    eprintln!("backup: {e}");
-                }
-                compose(&pasta, &["stop"], Duration::from_secs(120))?;
-                rodar("colima", &["stop"], None, Duration::from_secs(120))?;
-            }
-            Ok::<_, String>(())
-        })
-        .await;
-        if let Ok(Err(e)) | Err(e) = resultado.map_err(|e| e.to_string()) {
-            eprintln!("desligar o servidor: {e}");
-        }
-        app.exit(0);
+        let _ =
+            tokio::time::timeout(Duration::from_secs(15), crate::sincronia::sincronizar(app)).await;
     });
-    true
+    // 2. Backup (se vencido), compose stop, colima stop
+    let resultado = (|| {
+        if colima_ligado() {
+            if let Err(e) = backup_se_preciso(&pasta) {
+                eprintln!("backup: {e}");
+            }
+            compose(&pasta, &["stop"], Duration::from_secs(120))?;
+            rodar("colima", &["stop"], None, Duration::from_secs(120))?;
+        }
+        Ok::<_, String>(())
+    })();
+    if let Err(e) = resultado {
+        eprintln!("desligar o servidor: {e}");
+    }
 }

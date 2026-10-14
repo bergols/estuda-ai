@@ -71,14 +71,13 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("erro ao iniciar o estuda-ai")
-        .run(|app, evento| {
-            // Fechamento normal (última janela, Cmd+Q): desliga o servidor do Mac antes de
-            // sair. Travou ou foi morto à força: este evento nem acontece, e o servidor
-            // fica ligado (decisão do autor; ver servidor.rs).
-            if let tauri::RunEvent::ExitRequested { api, .. } = evento
-                && servidor::ao_fechar(app)
-            {
-                api.prevent_exit();
-            }
+        .run(|app, evento| match evento {
+            // Reinício da atualização automática: marca para o servidor não desligar
+            tauri::RunEvent::ExitRequested { code, .. } => servidor::ao_pedir_saida(app, code),
+            // Fim normal (última janela fechada ou Cmd+Q, que no macOS só chega aqui):
+            // desliga o servidor do Mac antes de sair. Travou ou foi morto à força: nem
+            // passa por aqui, e o servidor fica ligado (decisão do autor; ver servidor.rs).
+            tauri::RunEvent::Exit => servidor::ao_sair(app),
+            _ => {}
         });
 }
