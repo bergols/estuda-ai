@@ -383,15 +383,27 @@ Windows, ou num Mac sem o servidor, nada disso roda).
 
 | Momento | O que acontece |
 |---|---|
-| Abrir o app | se o `/health` (`127.0.0.1:8080`) não responde: `colima start` (se a VM está desligada) → `docker compose -f docker-compose.prod.yml up -d` → espera o `/health` (até 3 min), com a tela "Iniciando o servidor…" e a etapa atual. Leva de 30 s a 1 min. |
+| Abrir o app | se o `/health` (`127.0.0.1:8080`) não responde: `colima start` (se a VM está desligada) → `docker compose -f docker-compose.prod.yml up -d` → espera o `/health` (até 3 min), com a tela "Iniciando o servidor…" e a etapa atual. Leva ~25 s. |
 | Com o app aberto | backup a cada 24 h (confere de hora em hora) |
 | Fechar o app (normal: última janela ou Cmd+Q) | a janela some; o app envia as sessões pendentes, faz o backup se o último tem 24 h ou mais, roda `docker compose stop` e `colima stop`, e só então sai (~20 s) |
 | O app travou ou foi fechado à força | **o servidor fica ligado** (decisão do autor): derrubar a API no meio de algo é pior que gastar bateria. Abrir o app de novo encontra tudo no ar. |
 | Abrir o app duas vezes | `tauri-plugin-single-instance`: a segunda abertura só traz a janela que já existe para a frente |
 
 **Por que `colima stop` e não só `docker compose stop`:** o compose parado deixa a VM ligada,
-ociosa (~1–3% de CPU) mas segurando a RAM; a VM parada devolve tudo ao Mac. O preço é o boot: ~30 a
-60 s, contra ~10 a 20 s de religar só os containers.
+ociosa (~1–3% de CPU) mas segurando a RAM; a VM parada devolve tudo ao Mac. O preço é o boot.
+Medido no Mac em 14/10/2026 (os mesmos comandos do app):
+
+| Etapa | Tempo |
+|---|---|
+| `docker compose stop` | 11 s |
+| `colima stop` | 4 s (o processo da VM some do Mac) |
+| `colima start` | 13 s |
+| `docker compose up -d` | 6 s |
+| até o `/health` responder | 5 s |
+| **religar, no total** | **24 s** |
+
+Flashcards, questões e sessões contados antes e depois: iguais (104, 42, 4). E o caminho de fora
+(Vercel → Funnel → API) voltou sozinho, sem mexer no Tailscale.
 
 **Os dados não se perdem:** o `compose stop` manda SIGTERM ao Postgres, que faz um shutdown limpo
 (grava tudo no disco); o `colima stop` desliga a VM normalmente, e os volumes ficam no disco

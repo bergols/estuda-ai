@@ -55,7 +55,7 @@ export function ServidorLocal() {
     };
   }, []);
 
-  // Relógio da tela "iniciando" (a VM leva ~30 a 60 s)
+  // Relógio da tela "iniciando" (religar tudo leva ~25 s)
   useEffect(() => {
     if (estado.fase !== "ligando") return;
     const id = setInterval(() => setAgora(Date.now()), 1000);
@@ -72,7 +72,7 @@ export function ServidorLocal() {
             {estado.etapa} · <span className="font-mono tabular-nums">{Math.max(0, Math.round((agora - estado.desde) / 1000))} s</span>
           </p>
           <p className="max-w-md text-xs text-apagado">
-            A API roda neste Mac e liga junto com o app (leva de 30 s a 1 min). Ao fechar o app, ela desliga sozinha.
+            A API roda neste Mac e liga junto com o app (leva uns 25 s). Ao fechar o app, ela desliga sozinha.
           </p>
         </>
       ) : (
