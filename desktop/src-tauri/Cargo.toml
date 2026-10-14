@@ -31,6 +31,7 @@ getrandom = "0.3"
 tauri-plugin-updater = "2"
 # Monitor de processos do modo foco (só a parte de processos, sem discos/rede/sensores)
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+tauri-plugin-single-instance = "2"
 
 [dev-dependencies]
 mockito = "1"

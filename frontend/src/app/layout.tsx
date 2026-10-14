@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Source_Serif_4 } from "next/font/google";
 
 import { Atualizacao } from "@/components/atualizacao";
+import { ServidorLocal } from "@/components/servidor-local";
 import { DESKTOP } from "@/lib/plataforma";
 
 import { Provedores } from "./provedores";
@@ -38,6 +39,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {children}
           {/* Só no app desktop: a web na Vercel atualiza a cada deploy */}
           {DESKTOP && <Atualizacao />}
+          {/* Só no Mac que hospeda a API: liga o servidor ao abrir o app */}
+          {DESKTOP && <ServidorLocal />}
         </Provedores>
       </body>
     </html>

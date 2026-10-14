@@ -7,4 +7,6 @@ pub mod bloqueio;
 
 pub mod fila;
 
+pub mod servidor;
+
 pub mod spotify;

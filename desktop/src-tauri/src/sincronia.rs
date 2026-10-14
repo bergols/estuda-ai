@@ -82,7 +82,8 @@ pub fn iniciar(app: AppHandle) {
     });
 }
 
-async fn sincronizar(app: &AppHandle) {
+/// Uma rodada de envio (o laço e o desligamento do servidor usam).
+pub(crate) async fn sincronizar(app: &AppHandle) {
     let sincronia = app.state::<Sincronia>();
     let estado = app.state::<Estado>();
     let erro = enviar_pendentes(&sincronia, &estado).await;

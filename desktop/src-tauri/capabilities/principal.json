@@ -29,6 +29,8 @@
     "allow-foco-sites-restaurar",
     "allow-foco-sites-situacao",
     "allow-foco-programas-iniciar",
-    "allow-foco-programas-parar"
+    "allow-foco-programas-parar",
+    "allow-servidor-situacao",
+    "allow-servidor-ligar"
   ]
 }

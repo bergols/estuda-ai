@@ -6,6 +6,7 @@ mod bloqueio;
 mod cofre;
 mod janela;
 mod ponte;
+mod servidor;
 mod sincronia;
 mod spotify;
 
@@ -19,6 +20,16 @@ pub fn run() {
         .manage(spotify::Player::novo())
         .manage(atualizacao::Pendente::default())
         .manage(bloqueio::Monitor::default())
+        .manage(servidor::Servidor::default())
+        // Uma instância só: abrir de novo traz a janela que já existe para a frente, em
+        // vez de duas instâncias ligando/desligando o mesmo servidor (e a mesma fila)
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(janela) = app.get_webview_window("principal") {
+                let _ = janela.show();
+                let _ = janela.unminimize();
+                let _ = janela.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -26,6 +37,7 @@ pub fn run() {
             let sincronia = sincronia::Sincronia::abrir(app.handle())?;
             app.manage(sincronia);
             sincronia::iniciar(app.handle().clone());
+            servidor::iniciar_backups(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -54,7 +66,19 @@ pub fn run() {
             bloqueio::foco_sites_situacao,
             bloqueio::foco_programas_iniciar,
             bloqueio::foco_programas_parar,
+            servidor::servidor_situacao,
+            servidor::servidor_ligar,
         ])
-        .run(tauri::generate_context!())
-        .expect("erro ao iniciar o estuda-ai");
+        .build(tauri::generate_context!())
+        .expect("erro ao iniciar o estuda-ai")
+        .run(|app, evento| {
+            // Fechamento normal (última janela, Cmd+Q): desliga o servidor do Mac antes de
+            // sair. Travou ou foi morto à força: este evento nem acontece, e o servidor
+            // fica ligado (decisão do autor; ver servidor.rs).
+            if let tauri::RunEvent::ExitRequested { api, .. } = evento
+                && servidor::ao_fechar(app)
+            {
+                api.prevent_exit();
+            }
+        });
 }

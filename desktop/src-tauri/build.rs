@@ -29,6 +29,8 @@ const COMANDOS: &[&str] = &[
     "foco_sites_situacao",
     "foco_programas_iniciar",
     "foco_programas_parar",
+    "servidor_situacao",
+    "servidor_ligar",
 ];
 
 fn main() {
