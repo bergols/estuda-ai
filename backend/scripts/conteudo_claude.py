@@ -41,7 +41,7 @@ import sys
 from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
@@ -92,6 +92,52 @@ class Lote(BaseModel):
         if not self.flashcards and not self.questoes:
             raise ValueError("o lote não tem flashcards nem questões")
         return self
+
+
+# ----------------------------------------------------------------------- enviar
+
+
+def cmd_enviar(session: Session, usuario: Usuario, args) -> None:
+    import hashlib
+    from uuid import uuid4
+
+    from app.config import get_settings
+    from app.models import Material
+    from app.servicos.processamento import processar_material
+
+    conteudo = sys.stdin.buffer.read()
+    if not conteudo.startswith(b"%PDF-"):
+        sys.exit("A entrada não é um PDF.")
+    disciplina = session.scalar(
+        select(Disciplina).where(
+            Disciplina.usuario_id == usuario.id, func.lower(Disciplina.nome) == args.disciplina.lower()
+        )
+    )
+    if disciplina is None:
+        disciplina = Disciplina(usuario_id=usuario.id, nome=args.disciplina)
+        session.add(disciplina)
+        session.flush()
+        print(f"Disciplina criada: [{disciplina.id}] {disciplina.nome}")
+    settings = get_settings()
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    nome = f"{uuid4().hex}.pdf"
+    (settings.upload_dir / nome).write_bytes(conteudo)
+    material = Material(
+        disciplina_id=disciplina.id, titulo=args.titulo, tipo="pdf", nome_arquivo=f"{args.titulo}.pdf",
+        hash_sha256=hashlib.sha256(conteudo).hexdigest(), tamanho_bytes=len(conteudo), caminho_arquivo=nome,
+    )
+    session.add(material)
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        (settings.upload_dir / nome).unlink(missing_ok=True)
+        raise
+    processar_material(material.id, settings.upload_dir, SessionLocal, get_embedder())
+    session.refresh(material)
+    trechos = session.scalar(text("SELECT count(*) FROM trechos WHERE material_id = :m"), {"m": material.id})
+    print(f"Material [{material.id}] {material.titulo}: {material.status}, {material.num_paginas} p., {trechos} trechos"
+          + (f" (erro: {material.erro_mensagem})" if material.erro_mensagem else ""))
 
 
 # ------------------------------------------------------------------------- conta
@@ -269,13 +315,17 @@ def main() -> None:
     p_trechos.add_argument("--inicio", type=int, default=0, help="pular os N primeiros trechos")
     p_importar = sub.add_parser("importar", help="grava o lote JSON lido da entrada padrão")
     p_importar.add_argument("--simular", action="store_true", help="valida e desfaz, sem gravar")
+    p_enviar = sub.add_parser("enviar", help="cadastra o PDF lido da entrada padrão (como o upload)")
+    p_enviar.add_argument("--disciplina", required=True, help="nome; criada se não existir")
+    p_enviar.add_argument("--titulo", required=True)
     args = parser.parse_args()
     if args.comando == "trechos" and args.disciplina and not args.tema:
         parser.error("--disciplina precisa de --tema")
 
     with SessionLocal() as session:
         usuario = escolher_usuario(session, args.email)
-        {"materiais": cmd_materiais, "trechos": cmd_trechos, "importar": cmd_importar}[args.comando](
+        comandos = {"materiais": cmd_materiais, "trechos": cmd_trechos, "importar": cmd_importar, "enviar": cmd_enviar}
+        comandos[args.comando](
             session, usuario, args
         )
 
