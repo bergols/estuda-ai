@@ -126,6 +126,10 @@ Armadilhas de ambiente já encontradas:
   mesmo com "Funnel on": `tailscale funnel --https=443 off && tailscale funnel --bg
   http://127.0.0.1:8080` (binário em /Applications/Tailscale.app/Contents/MacOS/Tailscale).
   Teste pela Vercel (POST /api/token com senha errada = 401), nunca do próprio Mac.
+- `docker` com "failed to connect ... /var/run/docker.sock" e o Colima ligado = o contexto
+  `colima` sumiu do `~/.docker`. `docker context create colima --docker
+  "host=unix://$HOME/.colima/default/docker.sock" && docker context use colima`. O app já passa
+  o `DOCKER_HOST` sozinho (`servidor.rs`).
 - Sem permissão de Acessibilidade não dá para digitar/clicar no app desktop por script.
   Para ver a janela: id via `CGWindowListCopyWindowInfo` (script Swift) e
   `screencapture -x -o -l <id>`; para testar o fluxo, o teste `--ignored` do `ponte.rs`.

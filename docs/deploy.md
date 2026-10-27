@@ -416,6 +416,14 @@ que o app nunca roda.
 binários são chamados por caminho fixo (`/opt/homebrew/bin/colima`...), com um PATH explícito: um
 app aberto pelo Finder não herda o PATH do terminal (testado com `env -i`).
 
+**O app não depende do contexto do Docker.** Em 27/10/2026 o servidor não ligava: o Colima estava
+no ar, mas o `docker` tentava `/var/run/docker.sock`, porque o contexto `colima` tinha sumido do
+`~/.docker/contexts` (algo reescreveu a pasta). Desde então o app passa
+`DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` a todo comando que roda (o `deploy/backup.sh`
+herda). No terminal, o conserto é recriar o contexto:
+`docker context create colima --docker "host=unix://$HOME/.colima/default/docker.sock"` e
+`docker context use colima` (ou `colima stop && colima start`, que o recria).
+
 ### Quem depende do Mac
 
 O app do **Windows** e o site da **Vercel** falam com a API pelo Tailscale Funnel. Com o app do Mac

@@ -29,6 +29,8 @@ const PATH: &str = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sb
 /// O Caddy do compose de produção, só no 127.0.0.1 (o /health não pede o segredo do BFF)
 const SAUDE: &str = "http://127.0.0.1:8080/health";
 const ESPERA_SAUDE: Duration = Duration::from_secs(180);
+/// O socket do Docker do Colima (perfil "default"), relativo à home
+const SOCKET_COLIMA: &str = ".colima/default/docker.sock";
 
 #[derive(Default)]
 pub struct Servidor {
@@ -56,6 +58,15 @@ fn binario(nome: &str) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(nome))
 }
 
+/// Aponta o Docker direto para o socket do Colima, sem depender do contexto ativo no
+/// ~/.docker/config.json: se outra coisa trocar o contexto (instalar ou atualizar o
+/// Docker Desktop, por exemplo), o docker cai no /var/run/docker.sock, que não existe,
+/// e o servidor não sobe. Vale também para o deploy/backup.sh, que herda o ambiente.
+fn docker_host() -> Option<String> {
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    Some(format!("unix://{}", home.join(SOCKET_COLIMA).display()))
+}
+
 /// Roda um comando fixo com prazo. Saída descartada (só o código importa), menos o
 /// fim do stderr, que vira a mensagem de erro.
 fn rodar(nome: &str, args: &[&str], dentro: Option<&Path>, prazo: Duration) -> Result<(), String> {
@@ -65,6 +76,9 @@ fn rodar(nome: &str, args: &[&str], dentro: Option<&Path>, prazo: Duration) -> R
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
+    if let Some(host) = docker_host() {
+        cmd.env("DOCKER_HOST", host);
+    }
     if let Some(d) = dentro {
         cmd.current_dir(d);
     }
